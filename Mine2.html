@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour Mobile</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 2px 2px 0px #000; pointer-events: none; z-index: 10; }
+        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 20; }
+        .btn { width: 80px; height: 80px; background: rgba(0,0,0,0.4); border: 3px solid #fff; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; user-select: none; }
+        .btn:active { background: rgba(255,255,255,0.4); }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2 id="levelText">NÍVEL: 1</h2>
+    </div>
+
+    <div class="controls">
+        <div style="display: flex; gap: 20px;">
+            <div class="btn" id="btnLeft">←</div>
+            <div class="btn" id="btnRight">→</div>
+        </div>
+        <div class="btn" id="btnJump">PULAR</div>
+    </div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+const gridSize = 45;
+const gravity = 0.6;
+let currentLevel = 1;
+let world = {};
+let cameraX = 0;
+
+const player = { x: 50, y: 300, w: 30, h: 50, vx: 0, vy: 0, speed: 6, jump: -13, onGround: false };
+
+function generateLevel(lvl) {
+    world = {};
+    cameraX = 0;
+    player.x = 50; player.y = 300;
+    
+    // Início
+    for(let i=0; i<5; i++) world[`${i*gridSize},${450}`] = "grass";
+
+    let lastX = 200;
+    let lastY = 450;
+    const steps = 10 + (lvl * 2);
+
+    for(let i = 0; i < steps; i++) {
+        lastX += 110 + Math.random() * 50;
+        lastY += (Math.random() - 0.5) * 150;
+        if(lastY > canvas.height - 100) lastY = canvas.height - 150;
+        if(lastY < 150) lastY = 200;
+        
+        let gx = Math.floor(lastX/gridSize)*gridSize;
+        let gy = Math.floor(lastY/gridSize)*gridSize;
+        world[`${gx},${gy}`] = (i === steps - 1) ? "gold" : "stone";
+    }
+}
+
+const input = { left: false, right: false, jump: false };
+const setupBtn = (id, key) => {
+    const el = document.getElementById(id);
+    el.ontouchstart = (e) => { e.preventDefault(); input[key] = true; };
+    el.ontouchend = (e) => { e.preventDefault(); input[key] = false; };
+};
+setupBtn("btnLeft", "left"); setupBtn("btnRight", "right"); setupBtn("btnJump", "jump");
+
+function drawSteve(x, y) {
+    // Pernas (Azul escuro)
+    ctx.fillStyle = "#3c44aa";
+    ctx.fillRect(x - cameraX, y + 30, 30, 20);
+    // Corpo (Ciano)
+    ctx.fillStyle = "#3aa0a0";
+    ctx.fillRect(x - cameraX, y + 10, 30, 20);
+    // Cabeça (Pele)
+    ctx.fillStyle = "#d3a395";
+    ctx.fillRect(x - cameraX + 5, y - 10, 20, 20);
+    // Cabelo
+    ctx.fillStyle = "#553311";
+    ctx.fillRect(x - cameraX + 5, y - 10, 20, 5);
+}
+
+function drawBlock(x, y, type) {
+    let screenX = x - cameraX;
+    if(type === "grass") {
+        ctx.fillStyle = "#795548"; ctx.fillRect(screenX, y, gridSize, gridSize); // Terra
+        ctx.fillStyle = "#2ecc71"; ctx.fillRect(screenX, y, gridSize, 12); // Grama
+    } else if(type === "stone") {
+        ctx.fillStyle = "#7f8c8d"; ctx.fillRect(screenX, y, gridSize, gridSize);
+        ctx.strokeStyle = "#95a5a6"; ctx.strokeRect(screenX+5, y+5, gridSize-10, gridSize-10);
+    } else if(type === "gold") {
+        ctx.fillStyle = "#f1c40f"; ctx.fillRect(screenX, y, gridSize, gridSize);
+        ctx.strokeStyle = "#f39c12"; ctx.strokeRect(screenX+5, y+5, gridSize-10, gridSize-10);
+    }
+}
+
+function update() {
+    if (input.left) player.vx = -player.speed;
+    else if (input.right) player.vx = player.speed;
+    else player.vx *= 0.8;
+
+    // Colisão horizontal
+    player.x += player.vx;
+    let blockH = checkCollision(player.x, player.y);
+    if(blockH && blockH !== "gold") player.x -= player.vx;
+
+    // Gravidade e Pulo
+    player.vy += gravity;
+    player.y += player.vy;
+    let blockV = checkCollision(player.x, player.y);
+    
+    if(blockV) {
+        if(blockV === "gold") {
+            currentLevel++;
+            document.getElementById("levelText").innerText = "NÍVEL: " + currentLevel;
+            generateLevel(currentLevel);
+            return;
+        }
+        if(player.vy > 0) {
+            player.y = Math.floor(player.y / gridSize) * gridSize - player.h;
+            player.onGround = true;
+        }
+        player.vy = 0;
+    } else {
+        player.onGround = false;
+    }
+
+    if (input.jump && player.onGround) {
+        player.vy = player.jump;
+        player.onGround = false;
+    }
+
+    // Câmera segue o player
+    cameraX = player.x - canvas.width / 3;
+
+    if(player.y > canvas.height + 100) generateLevel(currentLevel);
+
+    draw();
+    requestAnimationFrame(update);
+}
+
+function checkCollision(nx, ny) {
+    let points = [{x:nx+5, y:ny}, {x:nx+player.w-5, y:ny}, {x:nx+5, y:ny+player.h}, {x:nx+player.w-5, y:ny+player.h}];
+    for(let p of points) {
+        let gx = Math.floor(p.x / gridSize) * gridSize;
+        let gy = Math.floor(p.y / gridSize) * gridSize;
+        if(world[`${gx},${gy}`]) return world[`${gx},${gy}`];
+    }
+    return null;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Nuvens simples
+    ctx.fillStyle = "white";
+    ctx.fillRect(100 - cameraX*0.2, 50, 60, 20);
+    ctx.fillRect(400 - cameraX*0.2, 80, 80, 30);
+
+    for (let pos in world) {
+        const [x, y] = pos.split(",").map(Number);
+        if(x > cameraX - gridSize && x < cameraX + canvas.width) {
+            drawBlock(x, y, world[pos]);
+        }
+    }
+    drawSteve(player.x, player.y);
+}
+
+generateLevel(currentLevel);
+update();
+</script>
+</body>
+</html>
