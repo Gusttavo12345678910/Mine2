@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Steve Parkour PRO</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: sans-serif; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: white; padding: 10px; border-radius: 8px; z-index: 100; pointer-events: none; display: none; }
+        
+        #menu { 
+            position: absolute; inset: 0; background: #9db9eb; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; 
+        }
+
+        .btn-start { 
+            padding: 20px 40px; background: #4caf50; color: white; border: none; 
+            border-bottom: 5px solid #2e7d32; font-size: 24px; font-weight: bold; border-radius: 10px;
+        }
+
+        .controls { 
+            position: absolute; bottom: 30px; width: 100%; display: flex; 
+            justify-content: space-around; z-index: 150; display: none;
+        }
+
+        .ctrl-btn { 
+            width: 90px; height: 90px; background: rgba(255,255,255,0.4); 
+            border: 2px solid #333; border-radius: 50%; display: flex; 
+            align-items: center; justify-content: center; font-size: 30px; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="color:white; text-shadow: 3px 3px #000;">STEVE PARKOUR</h1>
+        <button class="btn-start" onclick="initGame()">JOGAR</button>
+    </div>
+
+    <div id="ui">
+        Distância: <span id="dist">0</span>m<br>
+        Gravidade: 7↑ 8↓
+    </div>
+
+    <div class="controls" id="gameButtons">
+        <div style="display: flex; gap: 20px;">
+            <div class="ctrl-btn" id="btnLeft">←</div>
+            <div class="ctrl-btn" id="btnRight">→</div>
+        </div>
+        <div class="ctrl-btn" id="btnJump" style="width: 140px; border-radius: 45px;">PULO</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false;
+let world = {};
+let particles = [];
+let cameraX = 0;
+
+// Configurações exatas que você pediu
+const GRAV_SUBIDA = 0.7; // Gravidade 7
+const GRAV_QUEDA = 0.8;  // Gravidade 8
+const JUMP_FORCE = -16;
+
+const player = {
+    x: 100, y: 200, w: 30, h: 50,
+    vx: 0, vy: 0,
+    onGround: false,
+    speed: 6
+};
+
+const keys = { left: false, right: false };
+
+function initGame() {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("ui").style.display = "block";
+    document.getElementById("gameButtons").style.display = "flex";
+    
+    // Gerar piso inicial
+    for(let i=0; i<10; i++) world[`${i*50},400`] = "grass";
+    
+    gameRunning = true;
+    loop();
+}
+
+function generateWorld(fromX) {
+    let x = fromX;
+    for(let i=0; i<15; i++) {
+        x += 150 + Math.random() * 80;
+        let y = 250 + Math.random() * 200;
+        let pos = `${Math.floor(x/50)*50},${Math.floor(y/50)*50}`;
+        world[pos] = (i === 14) ? "save" : "grass";
+    }
+}
+
+// Controles corrigidos (Move enquanto pula)
+document.getElementById("btnLeft").ontouchstart = (e) => { e.preventDefault(); keys.left = true; };
+document.getElementById("btnRight").ontouchstart = (e) => { e.preventDefault(); keys.right = true; };
+document.getElementById("btnLeft").ontouchend = () => keys.left = false;
+document.getElementById("btnRight").ontouchend = () => keys.right = false;
+document.getElementById("btnJump").ontouchstart = (e) => {
+    e.preventDefault();
+    if(player.onGround) {
+        player.vy = JUMP_FORCE;
+        player.onGround = false;
+    }
+};
+
+function loop() {
+    if(!gameRunning) return;
+
+    // Ajustar tela
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Física
+    if(keys.left) player.vx = -player.speed;
+    else if(keys.right) player.vx = player.speed;
+    else player.vx *= 0.8;
+
+    // APLICANDO A GRAVIDADE 7 E 8
+    if(player.vy < 0) player.vy += GRAV_SUBIDA;
+    else player.vy += GRAV_QUEDA;
+
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Colisão
+    player.onGround = false;
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(player.x + player.w > bx && player.x < bx + 50 &&
+           player.y + player.h > by && player.y + player.h < by + 25) {
+            
+            if(world[pos] === "save") {
+                for(let i=0; i<10; i++) particles.push({x: bx+25, y: by, vx: (Math.random()-0.5)*8, vy: -5, l: 1});
+                world[pos] = "grass";
+            }
+            
+            player.y = by - player.h;
+            player.vy = 0;
+            player.onGround = true;
+        }
+    }
+
+    // Morte/Reset
+    if(player.y > canvas.height) location.reload();
+
+    // Câmera
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+
+    // Desenhar
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    
+    // Desenhar Blocos
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(bx > cameraX - 100 && bx < cameraX + canvas.width) {
+            ctx.fillStyle = "#795548";
+            ctx.fillRect(bx - cameraX, by, 50, 50);
+            ctx.fillStyle = "#4caf50";
+            ctx.fillRect(bx - cameraX, by, 50, 15);
+        }
+    }
+
+    // Desenhar Partículas
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.l -= 0.02;
+        ctx.fillStyle = `rgba(255,215,0,${p.l})`;
+        ctx.fillRect(p.x - cameraX, p.y, 5, 5);
+        if(p.l <= 0) particles.splice(i, 1);
+    });
+
+    // Desenhar Steve Herobrine
+    ctx.fillStyle = "#3aa0a2"; // Camisa
+    ctx.fillRect(player.x - cameraX, player.y + 15, player.w, 25);
+    ctx.fillStyle = "#d3a395"; // Pele
+    ctx.fillRect(player.x - cameraX + 2, player.y, player.w - 4, 20);
+    ctx.fillStyle = "white"; // Olhos Herobrine
+    ctx.fillRect(player.x - cameraX + 5, player.y + 8, 6, 4);
+    ctx.fillRect(player.x - cameraX + 18, player.y + 8, 6, 4);
+
+    // Geração infinita
+    if(player.x > Object.keys(world).length * 10) generateWorld(player.x + 500);
+
+    document.getElementById("dist").innerText = Math.floor(player.x/50);
+    
+    requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
