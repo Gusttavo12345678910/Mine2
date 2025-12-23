@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour - Final Version</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #menu {
+            position: absolute; width: 100%; height: 100%;
+            background: linear-gradient(rgba(135, 206, 235, 0.8), rgba(157, 185, 235, 1));
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 200; gap: 20px;
+        }
+        .menu-btn {
+            width: 280px; padding: 20px; background: #4caf50; border: none; border-bottom: 6px solid #2e7d32;
+            border-radius: 8px; font-size: 22px; font-weight: bold; color: white; cursor: pointer;
+        }
+        #ui { position: absolute; top: 10px; left: 10px; background: white; padding: 10px; border-radius: 5px; border: 2px solid #333; z-index: 10; display: none; }
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: center; gap: 40px; z-index: 10; }
+        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.8); border: 3px solid #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1 style="color:white; text-shadow: 3px 3px #333; font-size: 45px;">STEVE PARKOUR</h1>
+        <div class="menu-btn" onclick="startGame()">JOGAR COM SOM</div>
+    </div>
+
+    <div id="ui"><b>METROS: <span id="dist">0</span>m</b></div>
+    <div class="controls" id="gameControls">
+        <div class="btn" id="left">←</div>
+        <div class="btn" id="right">→</div>
+        <div class="btn" id="jump" style="width:120px; border-radius:40px;">PULO</div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let cameraX = 0, world = {}, lastGeneratedX = 0, gameActive = false;
+let audioCtx, melodyInterval, currentNoteIndex = 0;
+
+// Escalas musicais que mudam no checkpoint
+const scales = [
+    [261, 329, 392, 523], // Dó Maior
+    [293, 349, 440, 587], // Ré Menor
+    [329, 392, 493, 659], // Mi Menor
+    [349, 440, 523, 698]  // Fá Maior
+];
+let currentScale = scales[0];
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    clearInterval(melodyInterval);
+    melodyInterval = setInterval(() => {
+        if (!gameActive) return;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(currentScale[currentNoteIndex % currentScale.length], audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+        currentNoteIndex++;
