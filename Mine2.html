@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Parkour Craft 2D</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10; left: 10; background: rgba(255,255,255,0.7); padding: 10px; border-radius: 5px; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <b>A / D</b>: Mover | <b>Espaço</b>: Pular | <b>Clique</b>: Criar/Destruir<br>
+        Chegue ao topo do Parkour!
+    </div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const gridSize = 40;
+const gravity = 0.6;
+const player = { 
+    x: 100, y: 400, w: 30, h: 45, 
+    vx: 0, vy: 0, speed: 6, jump: -13, 
+    onGround: false 
+};
+
+let world = {};
+
+// --- GERAÇÃO DO MAPA (PARKOUR) ---
+function generateMap() {
+    // Chão inicial
+    for(let x = 0; x < 400; x += gridSize) {
+        world[`${x},${520}`] = "#2ecc71"; 
+    }
+    
+    // Gerar escada de parkour
+    for(let i = 0; i < 15; i++) {
+        let px = 500 + (i * 120);
+        let py = 480 - (i * 80);
+        world[`${px},${py}`] = "#e67e22"; // Blocos de desafio
+        // Adiciona um bloco de apoio lateral
+        world[`${px + gridSize},${py}`] = "#e67e22";
+    }
+}
+generateMap();
+
+const keys = {};
+window.onkeydown = (e) => keys[e.code] = true;
+window.onkeyup = (e) => keys[e.code] = false;
+
+canvas.onmousedown = (e) => {
+    const gx = Math.floor(e.clientX / gridSize) * gridSize;
+    const gy = Math.floor(e.clientY / gridSize) * gridSize;
+    if (world[`${gx},${gy}`]) delete world[`${gx},${gy}`];
+    else world[`${gx},${gy}`] = "#95a5a6";
+};
+
+function checkCollision(newX, newY) {
+    // Verifica os 4 cantos do jogador para colisão com blocos
+    let points = [
+        {x: newX, y: newY},
+        {x: newX + player.w, y: newY},
+        {x: newX, y: newY + player.h},
+        {x: newX + player.w, y: newY + player.h}
+    ];
+
+    for(let p of points) {
+        let gx = Math.floor(p.x / gridSize) * gridSize;
+        let gy = Math.floor(p.y / gridSize) * gridSize;
+        if(world[`${gx},${gy}`]) return true;
+    }
+    return false;
+}
+
+function update() {
+    // Movimento Lateral
+    let nextVx = 0;
+    if (keys["KeyA"]) nextVx = -player.speed;
+    if (keys["KeyD"]) nextVx = player.speed;
+    
+    if (!checkCollision(player.x + nextVx, player.y)) {
+        player.x += nextVx;
+    }
+
+    // Gravidade e Pulo
+    player.vy += gravity;
+    
+    // Movimento Vertical (com colisão)
+    if (!checkCollision(player.x, player.y + player.vy)) {
+        player.y += player.vy;
+        player.onGround = false;
+    } else {
+        if(player.vy > 0) player.onGround = true;
+        player.vy = 0;
+    }
+
+    if (keys["Space"] && player.onGround) {
+        player.vy = player.jump;
+        player.onGround = false;
+    }
+
+    // Reset se cair no infinito
+    if(player.y > canvas.height) {
+        player.x = 100; player.y = 400; player.vy = 0;
+    }
+
+    draw();
+    requestAnimationFrame(update);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Desenhar Blocos
+    for (let pos in world) {
+        const [x, y] = pos.split(",").map(Number);
+        ctx.fillStyle = world[pos];
+        ctx.fillRect(x, y, gridSize, gridSize);
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.strokeRect(x, y, gridSize, gridSize);
+    }
+
+    // Desenhar Jogador
+    ctx.fillStyle = "#34495e";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+update();
+</script>
+</body>
+</html>
