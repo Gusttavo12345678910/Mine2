@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour Master</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 15px; left: 20px; color: #333; background: rgba(255,255,255,0.85); padding: 10px 20px; border-radius: 8px; border-bottom: 4px solid #aaa; pointer-events: none; }
+        #fs-btn { position: absolute; top: 15px; right: 20px; padding: 12px; background: #fff; border: 2px solid #333; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 50px; box-sizing: border-box; }
+        .btn-circle { width: 70px; height: 70px; background: rgba(255,255,255,0.7); border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: #555; }
+        .btn-circle:active { background: #fff; transform: scale(0.9); }
+        #jump-btn { width: 110px; border-radius: 35px; }
+    </style>
+</head>
+<body>
+    <div id="ui"><b>Nível: <span id="lvlNum">1</span></b></div>
+    <button id="fs-btn">TELA CHEIA</button>
+    <div class="controls">
+        <div style="display: flex; gap: 15px;">
+            <div class="btn-circle" id="btnLeft">←</div>
+            <div class="btn-circle" id="btnRight">→</div>
+        </div>
+        <div class="btn-circle" id="jump-btn">PULO</div>
+    </div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let currentLevel = 1;
+let world = {};
+let particles = [];
+let cameraX = 0;
+const gridSize = 48;
+
+// Reduzida a velocidade conforme pedido
+const player = { 
+    x: 100, y: 350, w: 28, h: 52, 
+    vx: 0, vy: 0, speed: 4.2, jump: -13.5, 
+    onGround: false, animStep: 0 
+};
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+// Sons via WebAudio (Sem arquivos externos)
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playOof() {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+}
+
+function createExplosion(x, y) {
+    for(let i=0; i<15; i++) {
+        particles.push({x, y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1});
+    }
+}
+
+function generateLevel(lvl) {
+    world = {}; player.x = 80; player.y = 350; player.vx = 0; player.vy = 0;
+    for(let i=0; i<5; i++) world[`${i*gridSize},${480}`] = "grass";
+    let lastX = 250, lastY = 480;
+    const steps = 8 + lvl;
+    for(let i = 0; i < steps; i++) {
+        lastX += 130 + Math.random() * 60;
+        lastY += (Math.random() - 0.5) * 160;
+        lastY = Math.max(200, Math.min(canvas.height - 100, lastY));
+        let gx = Math.floor(lastX/gridSize)*gridSize;
+        let gy = Math.floor(lastY/gridSize)*gridSize;
+        world[`${gx},${gy}`] = (i === steps - 1) ? "gold" : "stone";
+    }
+}
+
+const input = { left: false, right: false, jump: false };
+const setup = (id, k) => {
+    const el = document.getElementById(id);
+    el.ontouchstart = (e) => { e.preventDefault(); input[k] = true; if(audioCtx.state === 'suspended') audioCtx.resume(); };
+    el.ontouchend = () => input[k] = false;
+};
+setup("btnLeft", "left"); setup("btnRight", "right"); setup("jump-btn", "jump");
+
+function drawSteve(x, y) {
+    let sx = x - cameraX;
+    let walk = Math.sin(player.animStep) * 12; // Ângulo da animação
+    if(!player.onGround) walk = 15;
+    if(Math.abs(player.vx) < 0.1) walk = 0;
+
+    ctx.strokeStyle = "black"; ctx.lineWidth = 2;
+    // Braço Longe
+    ctx.fillStyle = "#d3a395";
+    ctx.fillRect(sx+10 - walk/2, y+12, 6, 18);
+    // Pernas
+    ctx.fillStyle = "#4a4db4";
+    ctx.fillRect(sx+4, y+34, 10, 18); // Perna 1
+    ctx.fillRect(sx+16, y+34, 10, 18); // Perna 2
+    // Corpo
+    ctx.fillStyle = "#3ab0a2";
+    ctx.fillRect(sx+4, y+10, 24, 24);
+    // Cabeça
+    ctx.fillStyle = "#d3a395";
+    ctx.fillRect(sx+2, y-14, 26, 24);
+    ctx.fillStyle = "#5d3a1a"; ctx.fillRect(sx+2, y-14, 26, 6); // Cabelo
+    // Olhos
+    ctx.fillStyle = "white"; ctx.fillRect(sx+6, y-2, 6, 4); ctx.fillRect(sx+18, y-2, 6, 4);
+    ctx.fillStyle = "#4c4cae"; ctx.fillRect(sx+8, y-2, 3, 4); ctx.fillRect(sx+20, y-2, 3, 4);
+    // Braço Perto
+    ctx.fillStyle = "#d3a395";
+    ctx.fillRect(sx+10 + walk/2, y+12, 6, 18);
+}
+
+function update() {
+    if (input.left) { player.vx = -player.speed; player.animStep += 0.2; }
+    else if (input.right) { player.vx = player.speed; player.animStep += 0.2; }
+    else { player.vx *= 0.8; player.animStep = 0; }
+
+    player.x += player.vx;
+    if(check(player.x, player.y+5) || check(player.x+player.w, player.y+5)) player.x -= player.vx;
+
+    player.vy += 0.65; player.y += player.vy;
+    let feet = check(player.x+5, player.y+player.h) || check(player.x+player.w-5, player.y+player.h);
+    if(feet) {
+        if(feet === "gold") {
+            createExplosion(player.x - cameraX, player.y);
+            currentLevel++; document.getElementById("lvlNum").innerText = currentLevel;
+            setTimeout(() => generateLevel(currentLevel), 200);
+            return;
+        }
+        player.y = Math.floor((player.y+player.h)/gridSize)*gridSize - player.h;
+        player.vy = 0; player.onGround = true;
+    } else player.onGround = false;
+
+    if(input.jump && player.onGround) { player.vy = player.jump; player.onGround = false; }
+    if(player.y > canvas.height + 100) { playOof(); generateLevel(currentLevel); }
+
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+    draw();
+    requestAnimationFrame(update);
+}
+
+function check(px, py) {
+    return world[`${Math.floor(px/gridSize)*gridSize},${Math.floor(py/gridSize)*gridSize}`];
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let pos in world) {
+        const [x, y] = pos.split(",").map(Number);
+        let sx = x - cameraX;
+        if(world[pos] === "grass") {
+            ctx.fillStyle = "#795548"; ctx.fillRect(sx, y, gridSize, gridSize);
+            ctx.fillStyle = "#4caf50"; ctx.fillRect(sx, y, gridSize, 12);
+        } else if(world[pos] === "stone") {
+            ctx.fillStyle = "#888"; ctx.fillRect(sx, y, gridSize, gridSize);
+            ctx.strokeStyle = "#666"; ctx.strokeRect(sx+4, y+4, gridSize-8, gridSize-8);
+        } else if(world[pos] === "gold") {
+            ctx.fillStyle = "#ffd700"; ctx.fillRect(sx, y, gridSize, gridSize);
+            ctx.strokeRect(sx+2, y+2, gridSize-4, gridSize-4);
+        }
+    }
+    drawSteve(player.x, player.y);
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+        ctx.fillStyle = `rgba(255, 215, 0, ${p.life})`;
+        ctx.fillRect(p.x, p.y, 8, 8);
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+}
+
+document.getElementById("fs-btn").onclick = () => document.documentElement.requestFullscreen();
+generateLevel(1); update();
+</script>
+</body>
+</html>
