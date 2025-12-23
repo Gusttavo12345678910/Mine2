@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour HD</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 15px; left: 20px; color: #333; background: rgba(255,255,255,0.8); padding: 10px 20px; border-radius: 5px; border-bottom: 4px solid #ccc; pointer-events: none; }
+        #fs-btn { position: absolute; top: 15px; right: 20px; padding: 12px; background: #eee; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; border-bottom: 4px solid #bbb; }
+        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 50px; box-sizing: border-box; }
+        .btn-circle { width: 75px; height: 75px; background: rgba(255,255,255,0.7); border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: #555; box-shadow: 0 4px 0 rgba(0,0,0,0.2); }
+        .btn-circle:active { transform: translateY(3px); box-shadow: none; background: #fff; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <b>Nível: <span id="lvlNum">1</span></b><br>
+        <small>Chegue ao bloco de OURO!</small>
+    </div>
+    <button id="fs-btn">TELA CHEIA</button>
+
+    <div class="controls">
+        <div style="display: flex; gap: 20px;">
+            <div class="btn-circle" id="btnLeft">←</div>
+            <div class="btn-circle" id="btnRight">→</div>
+        </div>
+        <div class="btn-circle" style="width: 100px; border-radius: 40px;" id="btnJump">PULO</div>
+    </div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+document.getElementById("fs-btn").onclick = () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+};
+
+const gridSize = 48;
+const gravity = 0.65;
+let currentLevel = 1;
+let world = {};
+let cameraX = 0;
+
+const player = { 
+    x: 100, y: 350, w: 32, h: 54, 
+    vx: 0, vy: 0, speed: 5.5, jump: -14, 
+    onGround: false 
+};
+
+function generateLevel(lvl) {
+    world = {};
+    player.x = 100; player.y = 350; player.vx = 0; player.vy = 0;
+    cameraX = 0;
+    
+    // Solo Inicial
+    for(let i=0; i<6; i++) world[`${i*gridSize},${480}`] = "grass";
+
+    let lastX = 300;
+    let lastY = 480;
+    const steps = 10 + lvl;
+
+    for(let i = 0; i < steps; i++) {
+        lastX += 130 + Math.random() * 50;
+        lastY += (Math.random() - 0.5) * 160;
+        lastY = Math.max(200, Math.min(canvas.height - 120, lastY));
+        
+        let gx = Math.floor(lastX/gridSize)*gridSize;
+        let gy = Math.floor(lastY/gridSize)*gridSize;
+        world[`${gx},${gy}`] = (i === steps - 1) ? "gold" : (Math.random() > 0.4 ? "stone" : "brick");
+    }
+}
+
+const input = { left: false, right: false, jump: false };
+const setupBtn = (id, key) => {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); input[key] = true; });
+    el.addEventListener('touchend', (e) => { e.preventDefault(); input[key] = false; });
+    el.onmousedown = () => input[key] = true;
+    el.onmouseup = () => input[key] = false;
+};
+setupBtn("btnLeft", "left"); setupBtn("btnRight", "right"); setupBtn("btnJump", "jump");
+
+function drawSteve(x, y) {
+    let sx = x - cameraX;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "black";
+
+    // Pernas (Roxo/Azul)
+    ctx.fillStyle = "#4a4db4";
+    ctx.fillRect(sx+4, y+34, 24, 20);
+    ctx.strokeRect(sx+4, y+34, 24, 20);
+    
+    // Tronco (Ciano)
+    ctx.fillStyle = "#3ab0a2";
+    ctx.fillRect(sx+4, y+10, 24, 24);
+    ctx.strokeRect(sx+4, y+10, 24, 24);
+
+    // Braços
+    ctx.fillStyle = "#d3a395";
+    ctx.fillRect(sx-2, y+10, 6, 22); ctx.strokeRect(sx-2, y+10, 6, 22);
+    ctx.fillRect(sx+28, y+10, 6, 22); ctx.strokeRect(sx+28, y+10, 6, 22);
+
+    // Cabeça
+    ctx.fillStyle = "#d3a395";
+    ctx.fillRect(sx+4, y-12, 24, 22);
+    ctx.strokeRect(sx+4, y-12, 24, 22);
+    
+    // Cabelo (Marrom)
+    ctx.fillStyle = "#5d3a1a";
+    ctx.fillRect(sx+4, y-12, 24, 6);
+    
+    // Olhos
+    ctx.fillStyle = "white";
+    ctx.fillRect(sx+6, y, 6, 4); ctx.fillRect(sx+20, y, 6, 4);
+    ctx.fillStyle = "#4c4cae";
+    ctx.fillRect(sx+8, y, 3, 4); ctx.fillRect(sx+20, y, 3, 4);
+}
+
+function drawBlock(x, y, type) {
+    let sx = x - cameraX;
+    ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    ctx.lineWidth = 1;
+
+    if(type === "grass") {
+        ctx.fillStyle = "#795548"; ctx.fillRect(sx, y, gridSize, gridSize);
+        ctx.fillStyle = "#4caf50"; ctx.fillRect(sx, y, gridSize, 14);
+    } else if(type === "stone") {
+        ctx.fillStyle = "#888"; ctx.fillRect(sx, y, gridSize, gridSize);
+        ctx.fillStyle = "#999"; ctx.fillRect(sx+5, y+5, 5, 5);
+    } else if(type === "brick") {
+        ctx.fillStyle = "#a54331"; ctx.fillRect(sx, y, gridSize, gridSize);
+        ctx.strokeRect(sx, y, gridSize, gridSize);
+    } else if(type === "gold") {
+        ctx.fillStyle = "#ffd700"; ctx.fillRect(sx, y, gridSize, gridSize);
+        ctx.strokeRect(sx+6, y+6, gridSize-12, gridSize-12);
+    }
+}
+
+function checkAt(px, py) {
+    let gx = Math.floor(px / gridSize) * gridSize;
+    let gy = Math.floor(py / gridSize) * gridSize;
+    return world[`${gx},${gy}`] || null;
+}
+
+function update() {
+    // Movimento Lateral
+    if (input.left) player.vx = -player.speed;
+    else if (input.right) player.vx = player.speed;
+    else player.vx *= 0.8;
+
+    // Física Eixo X
+    player.x += player.vx;
+    if(checkAt(player.x, player.y+2) || checkAt(player.x+player.w, player.y+2) || 
+       checkAt(player.x, player.y+player.h-2) || checkAt(player.x+player.w, player.y+player.h-2)) {
+        player.x -= player.vx;
+    }
+
+    // Física Eixo Y (Gravidade)
+    player.vy += gravity;
+    player.y += player.vy;
+    player.onGround = false;
+
+    let hitHead = checkAt(player.x+4, player.y) || checkAt(player.x+player.w-4, player.y);
+    let hitFeet = checkAt(player.x+4, player.y+player.h) || checkAt(player.x+player.w-4, player.y+player.h);
+
+    if(hitFeet) {
+        if(hitFeet === "gold") {
+            currentLevel++;
+            document.getElementById("lvlNum").innerText = currentLevel;
+            generateLevel(currentLevel);
+            return;
+        }
+        player.y = Math.floor((player.y + player.h) / gridSize) * gridSize - player.h;
+        player.vy = 0;
+        player.onGround = true;
+    } 
+    if(hitHead && player.vy < 0) { player.vy = 0; }
+
+    if (input.jump && player.onGround) {
+        player.vy = player.jump;
+        player.onGround = false;
+    }
+
+    // Morte/Queda
+    if(player.y > canvas.height + 100) generateLevel(currentLevel);
+
+    // Câmera Suave
+    let targetCam = player.x - canvas.width / 3;
+    cameraX += (targetCam - cameraX) * 0.1;
+
+    draw();
+    requestAnimationFrame(update);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Nuvens estilizadas
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    for(let i=0; i<10; i++) {
+        ctx.fillRect((i*500 - cameraX*0.2) % (canvas.width+500) - 200, 100 + (i%3)*50, 120, 40);
+    }
+
+    for (let pos in world) {
+        const [x, y] = pos.split(",").map(Number);
+        if(x > cameraX - gridSize && x < cameraX + canvas.width) {
+            drawBlock(x, y, world[pos]);
+        }
+    }
+    drawSteve(player.x, player.y);
+}
+
+generateLevel(currentLevel);
+update();
+</script>
+</body>
+</html>
