@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour - Sound FX Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #menu {
+            position: absolute; width: 100%; height: 100%;
+            background: linear-gradient(rgba(135, 206, 235, 0.6), rgba(157, 185, 235, 0.8));
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+            z-index: 200; padding: 40px 0; box-sizing: border-box;
+        }
+        .menu-btn {
+            width: 280px; padding: 18px; background: #4caf50; border: none; border-bottom: 6px solid #2e7d32;
+            border-radius: 8px; font-size: 22px; font-weight: bold; color: white; cursor: pointer; text-align: center;
+        }
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 5px; border: 2px solid #333; z-index: 10; display: none; }
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: center; gap: 40px; z-index: 10; }
+        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.85); border: 3px solid #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; user-select: none; }
+    </style>
+</head>
+<body>
+
+    <div id="menu">
+        <h1>STEVE PARKOUR</h1>
+        <div id="highScoreText" style="color:#fff; font-size:18px; background:rgba(0,0,0,0.5); padding:8px 20px; border-radius:20px;">RECORDE: 0m</div>
+        <div style="flex-grow: 1;"></div> 
+        <div class="menu-btn" onclick="startGame()">INICIAR DESAFIO</div>
+    </div>
+
+    <div id="ui"><b>DISTÂNCIA: <span id="dist">0</span>m</b><br><b>TEMPO: <span id="timer">0.0</span>s</b></div>
+
+    <div class="controls" id="gameControls">
+        <div class="btn" id="left">←</div><div class="btn" id="right">→</div><div class="btn" id="jump" style="width:120px; border-radius:40px;">PULO</div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let cameraX = 0, world = {}, lastGeneratedX = 0, gameActive = false, startTime = 0;
+let particles = [], stepTimer = 0;
+
+// SISTEMA DE SOM (Música e Efeitos)
+let audioCtx, melodyInterval, currentNoteIndex = 0;
+const scales = [[261, 329, 392], [349, 440, 523], [392, 493, 587]];
+let currentScale = scales[0];
+
+function playSoundFX(freq, type, duration, vol) {
+    if(!audioCtx) return;
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    if(type === 'sine') osc.frequency.exponentialRampToValueAtTime(freq*2, audioCtx.currentTime + duration);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + duration);
+}
+
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    clearInterval(melodyInterval);
+    melodyInterval = setInterval(() => {
+        if (!gameActive) return;
+        playSoundFX(currentScale[currentNoteIndex % currentScale.length], 'square', 0.2, 0.03);
+        currentNoteIndex++;
+    }, 250);
+}
+
+const player = { x: 80, y: 350, w: 32, h: 56, vx: 0, vy: 0, speed: 4.6, jump: -15, onGround: false, animStep: 0 };
+
+function startGame() {
+    initAudio();
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("ui").style.display = "block";
+    document.getElementById("gameControls").style.display = "flex";
+    world = {}; lastGeneratedX = 0; player.x = 80; player.y = 350; cameraX = 0;
+    for(let i=0; i<6; i++) world[`${i*50},450`] = "grass";
+    expandWorld(300);
+    gameActive = true; startTime = Date.now();
+}
+
+function expandWorld(startX) {
+    let x = startX;
+    for(let i = 0; i < 15; i++) {
+        x += 150 + Math.random() * 50;
+        let gx = Math.floor(x/50)*50, gy = 450 + (Math.random()-0.5)*200;
+        world[`${gx},${Math.floor(gy/50)*50}`] = (i === 14) ? "gold" : "stone";
+    }
+    lastGeneratedX = x;
+}
+
+const input = { left: false, right: false };
+const bind = (id, k) => {
+    const el = document.getElementById(id);
+    el.ontouchstart = (e) => { e.preventDefault(); input[k] = true; };
+    el.ontouchend = () => input[k] = false;
+};
+bind("left", "left"); bind("right", "right");
+document.getElementById("jump").ontouchstart = (e) => {
+    e.preventDefault();
+    if(player.onGround) {
+        player.vy = player.jump;
+        playSoundFX(150, 'sine', 0.2, 0.1); // SOM DE PULO
+    }
+};
+
+function update() {
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!gameActive) { drawSteve(0, 0, 3.5, true); requestAnimationFrame(update); return; }
+
+    document.getElementById("timer").innerText = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    if (input.left) player.vx = -player.speed;
+    else if (input.right) player.vx = player.speed;
+    else player.vx *= 0.8;
+
+    player.x += player.vx; player.vy += 0.8; player.y += player.vy;
+    
+    // Sons de passos ao correr
+    if(player.onGround && Math.abs(player.vx) > 1) {
+        player.animStep += 0.2;
+        if(Date.now() > stepTimer) {
+            playSoundFX(80, 'triangle', 0.05, 0.05); // SOM DE PASSO
+            stepTimer = Date.now() + 300;
+        }
+    }
+
+    let gx = Math.floor((player.x+16)/50)*50, gy = Math.floor((player.y+player.h)/50)*50;
+    if(world[`${gx},${gy}`]) {
+        if(world[`${gx},${gy}`] === "gold") {
+            world[`${gx},${gy}`] = "stone";
+            currentScale = scales[Math.floor(Math.random()*scales.length)];
+            playSoundFX(800, 'sine', 0.4, 0.1); // SOM DE CHECKPOINT
+        }
+        player.y = gy - player.h; player.vy = 0; player.onGround = true;
+    } else player.onGround = false;
+
+    if (player.y > canvas.height + 100) { gameActive = false; document.getElementById("menu").style.display = "flex"; }
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+
+    for (let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        ctx.fillStyle = world[pos] === "gold" ? "#ffd700" : "#757575";
+        ctx.fillRect(bx - cameraX, by, 50, 50);
+    }
+    drawSteve(player.x, player.y, 1, false);
+    requestAnimationFrame(update);
+}
+
+function drawSteve(x, y, scale, isMenu) {
+    let sx = isMenu ? canvas.width/2 - (16*scale) : x - cameraX, sy = isMenu ? canvas.height/2 - (40*scale) : y;
+    ctx.save();
+    ctx.lineWidth = isMenu ? 6 : 2; ctx.strokeStyle = "black";
+    ctx.fillStyle = "#3c44aa"; ctx.fillRect(sx+4*scale, sy+34*scale, 12*scale, 20*scale); // Pernas
+    ctx.fillStyle = "#3aa0a2"; ctx.fillRect(sx+4*scale, sy+10*scale, 24*scale, 24*scale); // Tronco
+    ctx.fillStyle = "#d3a395"; ctx.fillRect(sx+4*scale, sy-14*scale, 24*scale, 24*scale); // Cabeça
+    ctx.restore();
+}
+update();
+</script>
+</body>
+</html>
