@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobile Craft Parkour</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: white; text-shadow: 2px 2px 4px #000; pointer-events: none; }
+        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; }
+        .btn { width: 70px; height: 70px; background: rgba(255,255,255,0.3); border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; user-select: none; -webkit-tap-highlight-color: transparent; }
+        .btn:active { background: rgba(255,255,255,0.6); }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2 id="levelText">Nível: 1</h2>
+        <p>Chegue ao bloco de OURO!</p>
+    </div>
+
+    <div class="controls">
+        <div style="display: flex; gap: 10px;">
+            <div class="btn" id="btnLeft">←</div>
+            <div class="btn" id="btnRight">→</div>
+        </div>
+        <div class="btn" id="btnJump">PULO</div>
+    </div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const gridSize = 40;
+const gravity = 0.65;
+let currentLevel = 1;
+let world = {};
+const player = { x: 50, y: 300, w: 25, h: 40, vx: 0, vy: 0, speed: 6, jump: -14, onGround: false };
+
+// Texturas de Cores
+const colors = { grass: "#2ecc71", dirt: "#795548", stone: "#7f8c8d", gold: "#f1c40f" };
+
+function generateLevel(lvl) {
+    world = {};
+    // Plataforma inicial
+    for(let i=0; i<3; i++) world[`${i*gridSize},${480}`] = colors.grass;
+
+    // Gerador de Parkour Aleatório/Progressivo
+    let lastX = 120;
+    let lastY = 480;
+    const numSteps = 5 + (lvl * 2);
+
+    for(let i = 0; i < numSteps; i++) {
+        let gap = 80 + Math.min(lvl * 10, 100); // Espaço aumenta com nível
+        let climb = 40 + (Math.random() * 40); 
+        
+        lastX += gap;
+        lastY -= (i % 2 === 0) ? climb : -20; // Sobe e desce
+        
+        world[`${Math.floor(lastX/gridSize)*gridSize},${Math.floor(lastY/gridSize)*gridSize}`] = colors.stone;
+    }
+
+    // Bloco Final (Vitória)
+    world[`${Math.floor((lastX + 100)/gridSize)*gridSize},${Math.floor((lastY)/gridSize)*gridSize}`] = colors.gold;
+}
+
+// Controles
+const input = { left: false, right: false, jump: false };
+const setupBtn = (id, key) => {
+    const el = document.getElementById(id);
+    el.ontouchstart = (e) => { e.preventDefault(); input[key] = true; };
+    el.ontouchend = (e) => { e.preventDefault(); input[key] = false; };
+    el.onmousedown = () => input[key] = true;
+    el.onmouseup = () => input[key] = false;
+};
+setupBtn("btnLeft", "left");
+setupBtn("btnRight", "right");
+setupBtn("btnJump", "jump");
+
+// Teclado (para PC também)
+window.onkeydown = (e) => {
+    if(e.code === "KeyA") input.left = true;
+    if(e.code === "KeyD") input.right = true;
+    if(e.code === "Space") input.jump = true;
+};
+window.onkeyup = (e) => {
+    if(e.code === "KeyA") input.left = false;
+    if(e.code === "KeyD") input.right = false;
+    if(e.code === "Space") input.jump = false;
+};
+
+function checkCollision(nx, ny) {
+    let points = [{x:nx, y:ny}, {x:nx+player.w, y:ny}, {x:nx, y:ny+player.h}, {x:nx+player.w, y:ny+player.h}];
+    for(let p of points) {
+        let gx = Math.floor(p.x / gridSize) * gridSize;
+        let gy = Math.floor(p.y / gridSize) * gridSize;
+        if(world[`${gx},${gy}`]) return world[`${gx},${gy}`];
+    }
+    return null;
+}
+
+function update() {
+    if (input.left) player.vx = -player.speed;
+    else if (input.right) player.vx = player.speed;
+    else player.vx *= 0.8;
+
+    if (!checkCollision(player.x + player.vx, player.y)) player.x += player.vx;
+
+    player.vy += gravity;
+    let colType = checkCollision(player.x, player.y + player.vy);
+    
+    if (!colType) {
+        player.y += player.vy;
+        player.onGround = false;
+    } else {
+        if(colType === colors.gold) {
+            currentLevel++;
+            document.getElementById("levelText").innerText = "Nível: " + currentLevel;
+            player.x = 50; player.y = 300;
+            generateLevel(currentLevel);
+            return;
+        }
+        if(player.vy > 0) player.onGround = true;
+        player.vy = 0;
+    }
+
+    if (input.jump && player.onGround) {
+        player.vy = player.jump;
+        player.onGround = false;
+    }
+
+    if(player.y > canvas.height) { player.x = 50; player.y = 300; player.vy = 0; }
+    
+    draw();
+    requestAnimationFrame(update);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let pos in world) {
+        const [x, y] = pos.split(",").map(Number);
+        ctx.fillStyle = world[pos];
+        ctx.fillRect(x, y, gridSize, gridSize);
+        // "Sombra" do bloco
+        ctx.fillStyle = "rgba(0,0,0,0.1)";
+        ctx.fillRect(x, y + gridSize-5, gridSize, 5);
+    }
+    ctx.fillStyle = "#e74c3c"; // Personagem
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+}
+
+generateLevel(currentLevel);
+update();
+</script>
+</body>
+</html>
