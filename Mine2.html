@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour HD - Ultimate Animated Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        
+        #menu, #deathMenu, #shopMenu, #recordMenu { 
+            position: absolute; inset: 0; background: #9db9eb; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            z-index: 200; text-align: center;
+        }
+        #deathMenu, #shopMenu, #recordMenu { background: rgba(0,0,0,0.95); color: white; display: none; z-index: 300; }
+
+        .btn { width: 280px; padding: 15px; margin: 6px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px #222; }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-record { background: #ff9800; }
+        .btn-menu { background: #757575; }
+        .btn:active { transform: translateY(2px); box-shadow: 0 2px #111; }
+        
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px; z-index: 100; display: none; font-size: 14px; border: 1px solid #fff; }
+        #abilityHUD { position: absolute; top: 10px; right: 10px; width: 70px; height: 70px; background: rgba(0,0,0,0.8); border: 2px solid #00e5ff; border-radius: 10px; display: none; z-index: 100; overflow: hidden; }
+        #abilityFill { position: absolute; bottom: 0; width: 100%; background: rgba(0, 229, 255, 0.5); transition: height 0.2s; }
+        
+        #checkpointMsg { position: absolute; top: 20%; width: 100%; text-align: center; color: #00e5ff; font-size: 32px; font-weight: bold; display: none; text-shadow: 3px 3px #000; z-index: 150; pointer-events: none; animation: pop 0.5s ease; }
+        @keyframes pop { 0% { transform: scale(0.5); } 100% { transform: scale(1); } }
+
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 150; }
+        .ctrl-btn { width: 75px; height: 75px; background: rgba(255,255,255,0.2); border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 25px; color: white; user-select: none; }
+        .power-btn { background: rgba(0, 229, 255, 0.3); border-color: #00e5ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="checkpointMsg">CHECKPOINT! +10 💎</div>
+
+    <div id="menu">
+        <h1 style="color:white; text-shadow: 3px 3px #000; margin: 10px; font-size: 40px;">STEVE PARKOUR HD</h1>
+        <button class="btn btn-start" onclick="initGame(true)">JOGAR</button>
+        <button class="btn btn-shop" onclick="openShop()">LOJA SKINS 🛒</button>
+        <button class="btn btn-record" onclick="openRecord()">RECORDES 🏆</button>
+    </div>
+
+    <div id="recordMenu">
+        <h1>🏆 SEU RECORDE</h1>
+        <p style="font-size: 45px; color: #ff9800; margin: 20px;"><span id="bestDist">0</span>m</p>
+        <button class="btn btn-menu" onclick="closeRecord()">VOLTAR</button>
+    </div>
+
+    <div id="shopMenu">
+        <h1>LOJA</h1>
+        <p>Tuas Esmeraldas: 💎 <span id="shopCoins">0</span></p>
+        <div style="background: rgba(255,255,255,0.1); padding: 25px; border-radius: 20px; border: 3px solid #00e5ff; margin-bottom: 15px;">
+            <h2 style="color: #00e5ff;">HEROBRINE</h2>
+            <p>Especial: Cria blocos ao andar<br>Preço: 2.500 💎</p>
+            <button id="buyHeroBtn" class="btn btn-shop" onclick="handleSkinAction()">COMPRAR</button>
+        </div>
+        <button class="btn btn-menu" onclick="closeShop()">VOLTAR</button>
+    </div>
+
+    <div id="ui">👤 <span id="skinLabel">Steve</span> | 🏁 <span id="dist">0</span>m | 💎 <span id="coins">0</span></div>
+    <div id="abilityHUD"><div id="abilityFill"></div><div style="position:relative; z-index:2; text-align:center; padding-top:20px; font-size:22px; color:white; font-weight:bold;">W</div></div>
+
+    <div id="deathMenu">
+        <h1 style="color:#ff5252; font-size: 40px;">FIM DE JOGO</h1>
+        <p id="deathResult" style="font-size: 20px;"></p>
+        <button class="btn btn-start" onclick="initGame(false)">CHECKPOINT 🚩</button>
+        <button class="btn btn-menu" onclick="location.reload()">MENU PRINCIPAL</button>
+    </div>
+
+    <div class="controls" id="mobileControls">
+        <div style="display: flex; gap: 15px;"><div class="ctrl-btn" id="btnLeft">←</div><div class="ctrl-btn" id="btnRight">→</div></div>
+        <div style="display: flex; gap: 15px;"><div class="ctrl-btn power-btn" id="btnPower">W</div><div class="ctrl-btn" id="btnJump">↑</div></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, physicsActive = false, world = {}, cameraX = 0, lastX = 0;
+let coins = parseInt(localStorage.getItem("steve_coins")) || 0;
+let highScore = parseInt(localStorage.getItem("steve_record")) || 0;
+let gems = [], particles = [], hasHerobrine = localStorage.getItem("skin_herobrine") === "true", currentSkin = "steve";
+let abilityReady = true, blocksLeftToPlace = 0, lastUsedDist = 0, animTimer = 0;
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playCoinSound(type) {
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+    let freq = type === "red" ? 1500 : (type === "blue" ? 1200 : 987);
+    osc.type = "triangle"; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq + 400, audioCtx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime); osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+}
+
+let lastCheckpoint = { x: 100, y: 0 };
+let checkpointsAchieved = [];
+const CHECKPOINT_INTERVAL = 80;
+const GRAV_UP = 0.7, GRAV_DOWN = 0.82, JUMP_FORCE = -16.6, SPEED = 6.5;
+const player = { x: 100, y: 0, w: 32, h: 64, vx: 0, vy: 0, onGround: false };
+const input = { left: false, right: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+function openShop() { 
+    document.getElementById("shopCoins").innerText = coins; 
+    const btn = document.getElementById("buyHeroBtn"); 
+    btn.innerText = hasHerobrine ? (currentSkin === "herobrine" ? "EQUIPADO" : "EQUIPAR") : "COMPRAR (2.500 💎)";
+    document.getElementById("shopMenu").style.display = "flex"; 
+}
+function closeShop() { document.getElementById("shopMenu").style.display = "none"; }
+function openRecord() { document.getElementById("bestDist").innerText = highScore; document.getElementById("recordMenu").style.display = "flex"; }
+function closeRecord() { document.getElementById("recordMenu").style.display = "none"; }
+
+function generateBlocks(startX, count) {
+    let x = startX;
+    let lastY = canvas.height * 0.6;
+    for(let i = 0; i < count; i++) {
+        x += 145 + Math.random() * 75; 
+        let newY = Math.max(canvas.height * 0.35, Math.min(canvas.height * 0.75, lastY + (Math.random() * 110 - 55)));
+        let bx = Math.floor(x/50)*50, by = Math.floor(newY/50)*50;
+        
+        let currentMeters = Math.floor(bx/50);
+        if (currentMeters > 0 && currentMeters % CHECKPOINT_INTERVAL === 0) world[`${bx},${by}`] = "checkpoint";
+        else world[`${bx},${by}`] = "grass";
+        
+        if (Math.random() > 0.45) {
+            let type = "green", val = 1, rng = Math.random();
+            if (rng < 0.05) { type = "red"; val = 8; }
+            else if (rng < 0.25) { type = "blue"; val = 4; }
+            gems.push({ x: bx + 15, y: by - 60, collected: false, type: type, value: val });
+        }
+        lastX = x; lastY = by;
+    }
+}
+
+function createDust(x, y) {
+    for(let i=0; i<3; i++) {
+        particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: -Math.random()*3, life: 1, size: 4 + Math.random()*4 });
+    }
+}
+
+function drawGem(x, y, type) {
+    ctx.save();
+    ctx.translate(x + 10, y + 15 + Math.sin(animTimer*0.1)*5); // Flutuação
+    let color = "#00E676";
+    if(type === "blue") color = "#2979FF";
+    if(type === "red") color = "#FF1744";
+    
+    if(type !== "green") { ctx.shadowBlur = 15; ctx.shadowColor = color; }
+
+    // Formato de Esmeralda Minecraft HD
+    ctx.beginPath();
+    ctx.moveTo(0, -15); ctx.lineTo(10, -5); ctx.lineTo(10, 5); ctx.lineTo(0, 15); ctx.lineTo(-10, 5); ctx.lineTo(-10, -5); ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2; ctx.stroke();
+    
+    // Brilho interno
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillRect(-4, -8, 4, 4);
+    ctx.restore();
+}
+
+function drawPlayer(x, y, isHero) {
+    ctx.save();
+    let legMove = Math.sin(animTimer * 0.2) * 18;
+    let armMove = Math.cos(animTimer * 0.2) * 18;
+    
+    if(!player.onGround) { legMove = 12; armMove = -15; }
+    else if(Math.abs(player.vx) < 1) { legMove = 0; armMove = 0; }
+
+    // Pernas (com animação)
+    ctx.fillStyle = isHero ? "#111" : "#3c44aa";
+    ctx.fillRect(x + 4, y + 40 + (legMove > 0 ? legMove/2 : 0), 10, 24 - (legMove > 0 ? legMove/2 : 0));
+    ctx.fillRect(x + 18, y + 40 + (legMove < 0 ? -legMove/2 : 0), 10, 24 - (legMove < 0 ? -legMove/2 : 0));
+
+    // Braços (com animação)
+    ctx.fillStyle = isHero ? "#b28d7d" : "#d3a395";
+    ctx.fillRect(x - 2, y + 18 + (armMove > 0 ? armMove/2 : 0), 6, 20);
+    ctx.fillRect(x + 28, y + 18 + (armMove < 0 ? -armMove/2 : 0), 6, 20);
+
+    // Corpo e Cabeça
+    ctx.fillStyle = isHero ? "#333" : "#3aa0a2"; ctx.fillRect(x + 4, y + 18, 24, 22);
+    ctx.fillStyle = isHero ? "#b28d7d" : "#d3a395"; ctx.fillRect(x + 4, y, 24, 20);
+    ctx.fillStyle = isHero ? "#3a2518" : "#4e342e"; ctx.fillRect(x + 4, y, 24, 6);
+    
+    // Olhos Herobrine vs Steve
+    ctx.fillStyle = "white";
+    if(isHero) { ctx.shadowBlur = 10; ctx.shadowColor = "white"; ctx.fillRect(x+7, y+9, 6, 5); ctx.fillRect(x+19, y+9, 6, 5); ctx.shadowBlur = 0; }
+    else { 
+        ctx.fillRect(x+7, y+9, 6, 5); ctx.fillRect(x+19, y+9, 6, 5); 
+        ctx.fillStyle = "#3c44aa"; ctx.fillRect(x+10, y+9, 3, 5); ctx.fillRect(x+22, y+9, 3, 5); 
+    }
+    ctx.restore();
+}
+
+function initGame(resetAll) {
+    document.getElementById("menu").style.display = "none"; document.getElementById("deathMenu").style.display = "none"; document.getElementById("ui").style.display = "block";
+    document.getElementById("coins").innerText = coins;
+    if ('ontouchstart' in window) document.getElementById("mobileControls").style.display = "flex";
+    document.getElementById("abilityHUD").style.display = currentSkin === "herobrine" ? "block" : "none";
+    if (resetAll) {
+        lastCheckpoint = { x: 100, y: canvas.height * 0.7 }; world = {}; gems = []; checkpointsAchieved = [];
+        for(let i=0; i<10; i++) world[`${i*50},${Math.floor(canvas.height*0.75/50)*50}`] = "grass";
+        generateBlocks(600, 15);
+    }
+    player.x = lastCheckpoint.x; player.y = lastCheckpoint.y - 100;
+    player.vy = 0; player.vx = 0; cameraX = player.x - 150;
+    gameRunning = true; requestAnimationFrame(loop);
+}
+
+function loop() {
+    if(!gameRunning) return;
+    animTimer += Math.abs(player.vx) + 2;
+
+    if(physicsActive) {
+        if(input.left) player.vx = -SPEED; else if(input.right) player.vx = SPEED; else player.vx *= 0.82;
+        player.vy += (player.vy < 0) ? GRAV_UP : GRAV_DOWN;
+        player.x += player.vx; player.y += player.vy;
+        player.onGround = false;
+
+        if(Math.abs(player.vx) > 1 && player.onGround && Math.random() > 0.7) createDust(player.x+16, player.y+64);
+
+        if (blocksLeftToPlace > 0) {
+            let bx = Math.floor((player.x + 40)/50)*50, by = Math.floor((player.y + player.h)/50)*50;
+            if (!world[`${bx},${by}`]) { world[`${bx},${by}`] = "diamond"; blocksLeftToPlace--; }
+        }
+
+        for(let pos in world) {
+            let [bx, by] = pos.split(",").map(Number);
+            if(player.x + player.w > bx && player.x < bx + 50 && player.y + player.h > by && player.y + player.h < by + 20) {
+                if(player.vy > 0) { 
+                    player.y = by - player.h; player.vy = 0; player.onGround = true; 
+                    if(world[pos] === "checkpoint" && !checkpointsAchieved.includes(pos)) {
+                        lastCheckpoint = { x: bx, y: by }; checkpointsAchieved.push(pos);
+                        coins += 10; document.getElementById("coins").innerText = coins; localStorage.setItem("steve_coins", coins);
+                        playCoinSound("green");
+                        document.getElementById("checkpointMsg").style.display = "block"; setTimeout(()=>document.getElementById("checkpointMsg").style.display="none", 1500);
+                    }
+                }
+            }
+        }
+        
+        gems.forEach(gem => {
+            if (!gem.collected && player.x < gem.x + 25 && player.x + player.w > gem.x && player.y < gem.y + 35 && player.y + player.h > gem.y) {
+                gem.collected = true; coins += gem.value; document.getElementById("coins").innerText = coins;
+                localStorage.setItem("steve_coins", coins); playCoinSound(gem.type);
+            }
+        });
+
+        if(player.y > canvas.height + 200) {
+            gameRunning = false;
+            let d = Math.floor(player.x/50);
+            if(d > highScore) { highScore = d; localStorage.setItem("steve_record", highScore); }
+            document.getElementById("deathResult").innerText = `Atual: ${d}m | Recorde: ${highScore}m`;
+            document.getElementById("deathMenu").style.display = "flex";
+            return;
+        }
+        cameraX += (player.x - canvas.width/3 - cameraX) * 0.12;
+        if(player.x > lastX - 1200) generateBlocks(lastX, 10);
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Partículas de Poeira
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+        ctx.fillStyle = `rgba(121, 85, 72, ${p.life})`;
+        ctx.fillRect(p.x - cameraX, p.y, p.size, p.size);
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(bx > cameraX - 100 && bx < cameraX + canvas.width) {
+            if(world[pos] === "checkpoint") {
+                ctx.fillStyle = "#333"; ctx.fillRect(bx - cameraX + 22, by - 45, 6, 45); 
+                ctx.fillStyle = "#00e5ff"; ctx.fillRect(bx - cameraX + 28, by - 45, 22, 16); 
+                ctx.fillStyle = "#fff"; ctx.fillRect(bx - cameraX, by, 50, 15); 
+            } else {
+                ctx.fillStyle = world[pos] === "diamond" ? "#00e5ff" : "#795548";
+                ctx.fillRect(bx - cameraX, by, 50, 50);
+                if(world[pos] === "grass") { ctx.fillStyle = "#4caf50"; ctx.fillRect(bx - cameraX, by, 50, 15); }
+            }
+        }
+    }
+    
+    gems.forEach(gem => { if (!gem.collected && gem.x > cameraX - 50 && gem.x < cameraX + canvas.width) drawGem(gem.x - cameraX, gem.y, gem.type); });
+    drawPlayer(player.x - cameraX, player.y, currentSkin === "herobrine");
+    document.getElementById("dist").innerText = Math.floor(player.x/50);
+    requestAnimationFrame(loop);
+}
+
+function triggerAbility() { if (currentSkin === "herobrine" && abilityReady) { abilityReady = false; blocksLeftToPlace = 9; lastUsedDist = Math.floor(player.x/50); } }
+function handleSkinAction() { 
+    if(!hasHerobrine && coins >= 2500){ 
+        coins -= 2500; hasHerobrine = true; currentSkin = "herobrine"; 
+        localStorage.setItem("steve_coins", coins); localStorage.setItem("skin_herobrine", "true"); 
+    } else if(hasHerobrine) { 
+        currentSkin = (currentSkin === "herobrine") ? "steve" : "herobrine"; 
+    } 
+    openShop(); 
+}
+
+window.addEventListener("keydown", (e) => { physicsActive = true; if(e.code === "KeyA") input.left = true; if(e.code === "KeyD") input.right = true; if(e.code === "Space" && player.onGround) player.vy = JUMP_FORCE; if(e.code === "KeyW") triggerAbility(); });
+window.addEventListener("keyup", (e) => { if(e.code === "KeyA") input.left = false; if(e.code === "KeyD") input.right = false; });
+const bind = (id, fn) => document.getElementById(id).addEventListener("touchstart", (e) => { e.preventDefault(); physicsActive = true; fn(); });
+bind("btnLeft", () => input.left = true); document.getElementById("btnLeft").addEventListener("touchend", () => input.left = false);
+bind("btnRight", () => input.right = true); document.getElementById("btnRight").addEventListener("touchend", () => input.right = false);
+bind("btnJump", () => { if(player.onGround) player.vy = JUMP_FORCE; });
+bind("btnPower", () => triggerAbility());
+</script>
+</body>
+</html>
