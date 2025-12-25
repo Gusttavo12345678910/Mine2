@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Parkour das Esmeraldas</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #14141e; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- CONFIGURAÇÕES DO JOGO ---
+const BLOCK_SIZE = 50;
+const PLAYER_SIZE = 40;
+const GRAVITY = 0.8;
+
+let player = {
+    x: 50, y: 300,
+    width: PLAYER_SIZE, height: PLAYER_SIZE,
+    velX: 0, velY: 0,
+    onGround: false,
+    checkpointX: 50, checkpointY: 300,
+    hasFirstCP: false,
+    nextCP: 80,
+    emeralds: 0,
+    distance: 0
+};
+
+let platforms = [];
+let gameActive = true;
+
+// Gerar blocos de 1 em 1
+for (let i = 0; i < 200; i++) {
+    platforms.push({
+        x: i * 160,
+        y: canvas.height - 150 - (Math.sin(i) * 100),
+        w: BLOCK_SIZE, h: BLOCK_SIZE
+    });
+}
+
+const keys = {};
+window.onkeydown = (e) => keys[e.code] = true;
+window.onkeyup = (e) => keys[e.code] = false;
+
+function drawPlayer() {
+    ctx.fillStyle = "#00c8ff";
+    ctx.strokeStyle = "#005096";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(canvas.width/2 - player.width/2, player.y, player.width, player.height, 5);
+    ctx.fill();
+    ctx.stroke();
+}
+
+function drawPlatforms(camX) {
+    ctx.fillStyle = "#969696";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    platforms.forEach(p => {
+        if (p.x - camX > -BLOCK_SIZE && p.x - camX < canvas.width) {
+            ctx.fillRect(p.x - camX, p.y, p.w, p.h);
+            ctx.strokeRect(p.x - camX, p.y, p.w, p.h);
+        }
+    });
+}
+
+function update() {
+    if (!gameActive) {
+        if (keys['KeyR']) restart();
+        return;
+    }
+
+    // Movimento
+    player.velX = 0;
+    if (keys['ArrowLeft']) player.velX = -6;
+    if (keys['ArrowRight']) player.velX = 6;
+    if (keys['Space'] && player.onGround) {
+        player.velY = -16;
+        player.onGround = false;
+    }
+
+    player.velY += GRAVITY;
+    player.x += player.velX;
+    player.y += player.velY;
+    player.distance = Math.floor(player.x / 10);
+
+    // Colisão (SISTEMA CORRIGIDO)
+    player.onGround = false;
+    platforms.forEach(p => {
+        if (player.x < p.x + p.w && player.x + player.width > p.x &&
+            player.y < p.y + p.h && player.y + player.height > p.y) {
+            
+            if (player.velY > 0) { // Caindo no bloco
+                player.y = p.y - player.height;
+                player.velY = 0;
+                player.onGround = true;
+
+                // Sistema de Checkpoint e Esmeraldas
+                if (player.distance >= player.nextCP) {
+                    player.checkpointX = player.x;
+                    player.checkpointY = player.y;
+                    player.hasFirstCP = true;
+                    sortearEsmeralda();
+                    player.nextCP = (player.nextCP === 80) ? 180 : player.nextCP + 100;
+                }
+            }
+        }
+    });
+
+    if (player.y > canvas.height) gameActive = false;
+}
+
+function sortearEsmeralda() {
+    let chance = Math.random() * 100;
+    if (chance <= 5) player.emeralds += 8;      // 5% Vermelha
+    else if (chance <= 25) player.emeralds += 4; // 20% Azul
+    else if (chance <= 80) player.emeralds += 1; // 55% Verde
+}
+
+function restart() {
+    player.x = player.checkpointX;
+    player.y = player.checkpointY;
+    player.velY = 0;
+    gameActive = true;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let camX = player.x - canvas.width / 2;
+
+    drawPlatforms(camX);
+    drawPlayer();
+
+    // HUD
+    ctx.fillStyle = "white";
+    ctx.font = "bold 20px Arial";
+    ctx.fillText(`Distância: ${player.distance}m`, 20, 40);
+    ctx.fillText(`Próximo Checkpoint: ${player.nextCP}m`, 20, 70);
+    ctx.fillStyle = "#50ff50";
+    ctx.fillText(`Esmeraldas: ${player.emeralds}`, 20, 100);
+
+    if (!gameActive) {
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "red";
+        ctx.font = "bold 40px Arial";
+        ctx.fillText("VOCÊ CAIU!", canvas.width/2 - 100, canvas.height/2 - 50);
+        ctx.fillStyle = "white";
+        ctx.font = "20px Arial";
+        let msg = player.hasFirstCP ? `Pressione R para o Checkpoint (${Math.floor(player.checkpointX/10)}m)` : "Pressione R para o Início";
+        ctx.fillText(msg, canvas.width/2 - 150, canvas.height/2 + 20);
+    }
+
+    update();
+    requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>
