@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Beast Parkour HD - Herobrine Dash Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #4a90e2; font-family: sans-serif; touch-action: none; }
+        canvas { display: block; image-rendering: pixelated; }
+        
+        .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; color: white; text-align: center; backdrop-filter: blur(10px); background: rgba(0,0,0,0.5); }
+        #ui { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.7); color: #00ff00; padding: 10px; border-radius: 5px; z-index: 100; font-family: monospace; border: 1px solid #555; cursor: pointer; }
+        
+        /* HUD de Recarga */
+        #cooldownHUD { position: absolute; top: 15px; right: 15px; width: 120px; height: 30px; background: rgba(0,0,0,0.8); border: 2px solid #fff; border-radius: 5px; z-index: 100; display: none; overflow: hidden; }
+        #cooldownFill { height: 100%; width: 100%; background: #00e5ff; transition: width 0.1s linear; }
+
+        .btn { width: 250px; padding: 15px; margin: 10px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; text-transform: uppercase; border-bottom: 4px solid rgba(0,0,0,0.3); }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-admin { background: #f44336; }
+
+        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 500; pointer-events: none; }
+        .ctrl-group { display: flex; gap: 20px; pointer-events: auto; }
+        .ctrl-btn { width: 75px; height: 75px; background: rgba(255,255,255,0.2); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; color: white; user-select: none; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">DISTÂNCIA: <span id="dist">0</span> | GEMAS: <span id="coins">0</span></div>
+    
+    <div id="cooldownHUD">
+        <div id="cooldownFill"></div>
+        <div style="position:absolute; width:100%; text-align:center; top:5px; font-size:12px; font-weight:bold;">PODER</div>
+    </div>
+
+    <div id="menu" class="overlay">
+        <h1>BEAST PARKOUR HD</h1>
+        <button class="btn btn-start" onclick="startGame()">JOGAR</button>
+        <button class="btn btn-shop" onclick="toggleShop(true)">SKINS</button>
+    </div>
+
+    <div id="shop" class="overlay" style="display:none">
+        <h2>LOJA DE SKINS</h2>
+        <p>Gemas: <span id="shopCoins">0</span></p>
+        <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px;">
+            <button class="btn" style="background:#444" onclick="selectSkin('steve')">STEVE</button>
+            <button class="btn" style="background:#e07e3e" onclick="selectSkin('alex')">ALEX</button>
+            <button class="btn" style="background:#00a8ff" onclick="selectSkin('mrbeast')">MRBEAST</button>
+            <button class="btn" style="background:#222" onclick="selectSkin('herobrine')">HEROBRINE</button>
+        </div>
+        <button class="btn" style="background:#777" onclick="toggleShop(false)">VOLTAR</button>
+    </div>
+
+    <div id="adminPanel" class="overlay" style="display:none; background: rgba(20,0,0,0.95);">
+        <h2 style="color:red">PAINEL GU24</h2>
+        <button class="btn btn-admin" onclick="addGems()">+1 MILHÃO DE GEMAS</button>
+        <button class="btn btn-admin" onclick="godMode = !godMode; alert('Pulo Infinito!')">MODO DEUS (VOAR)</button>
+        <button class="btn" style="background:#555" onclick="this.parentElement.style.display='none'">FECHAR</button>
+    </div>
+
+    <div class="controls" id="gameControls">
+        <div class="ctrl-group">
+            <div class="ctrl-btn" id="leftBtn">←</div>
+            <div class="ctrl-btn" id="rightBtn">→</div>
+        </div>
+        <div class="ctrl-group">
+            <div class="ctrl-btn" style="color:#00e5ff" id="powerBtn">W</div>
+            <div class="ctrl-btn" id="jumpBtn">↑</div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, world = [], cameraX = 0, coins = parseInt(localStorage.getItem("coins")) || 0;
+let currentSkin = localStorage.getItem("skin") || "steve";
+let godMode = false, particles = [];
+
+// Configurações de Habilidade
+let lastUseDist = -200; // Começa pronto para usar
+const DASH_COOLDOWN = 200; // Metros necessários para recarregar
+const DASH_DISTANCE = 1000; // 20 metros em pixels (considerando escala)
+
+const player = { x: 100, y: 100, vx: 0, vy: 0, w: 30, h: 60, onGround: false, canDoubleJump: false };
+const keys = { left: false, right: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+function toggleShop(show) {
+    document.getElementById("shopCoins").innerText = coins;
+    document.getElementById("shop").style.display = show ? "flex" : "none";
+}
+
+function selectSkin(s) {
+    currentSkin = s; localStorage.setItem("skin", s);
+    toggleShop(false);
+}
+
+// Admin
+document.getElementById("ui").onclick = () => {
+    let email = prompt("E-mail Admin:");
+    if(email === "gu24gamer@gmail.com") document.getElementById("adminPanel").style.display = "flex";
+};
+function addGems() { coins += 1000000; localStorage.setItem("coins", coins); }
+
+function createBlock(x, y) { return { x, y, w: 120, h: 40 }; }
+
+function createEffect(x, y, color) {
+    for(let i=0; i<15; i++) 
+        particles.push({x, y, vx: Math.random()*10-5, vy: Math.random()*10-5, life: 1, color});
+}
+
+function startGame() {
+    document.getElementById("menu").style.display = "none";
+    world = [];
+    for(let i=0; i<5; i++) world.push(createBlock(i*120, canvas.height - 100));
+    player.x = 100; player.y = canvas.height - 200; player.vx = 0; player.vy = 0;
+    lastUseDist = -200;
+    gameRunning = true; loop();
+}
+
+function handlePower() {
+    let distAtual = Math.floor(player.x / 50);
+    let pronto = (distAtual - lastUseDist) >= DASH_COOLDOWN;
+
+    if (currentSkin === "herobrine" && pronto && !player.onGround) {
+        // Habilidade Herobrine: Teletransporte 20m
+        createEffect(player.x - cameraX, player.y, "white"); // Efeito na saída
+        player.x += DASH_DISTANCE;
+        player.vy = -2; // Pequena flutuada após dash
+        lastUseDist = distAtual;
+        createEffect(player.x - cameraX, player.y, "#ffffff"); // Efeito na chegada
+    } 
+    else if (currentSkin === "mrbeast" && player.canDoubleJump && !player.onGround) {
+        // Habilidade MrBeast: Pulo Duplo
+        player.vy = -16;
+        player.canDoubleJump = false;
+        createEffect(player.x - cameraX, player.y, "#00ff00");
+    }
+}
+
+function loop() {
+    if(!gameRunning) return;
+    let distAtual = Math.floor(player.x / 50);
+
+    // Atualizar HUD de Cooldown
+    const barra = document.getElementById("cooldownFill");
+    const hud = document.getElementById("cooldownHUD");
+    if(currentSkin === "herobrine" || currentSkin === "mrbeast") {
+        hud.style.display = "block";
+        let progresso = Math.min(1, (distAtual - lastUseDist) / DASH_COOLDOWN);
+        barra.style.width = (progresso * 100) + "%";
+        barra.style.background = progresso >= 1 ? "#00ff00" : "#ffcc00";
+    } else {
+        hud.style.display = "none";
+    }
+
+    // Física e Movimento
+    if(keys.left) player.vx = -7; else if(keys.right) player.vx = 7; else player.vx *= 0.8;
+    player.vy += 0.8;
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Colisão
+    player.onGround = false;
+    world.forEach(b => {
+        if(player.x + player.w > b.x && player.x < b.x + b.w && 
+           player.y + player.h <= b.y && player.y + player.h + player.vy >= b.y) {
+            if(player.vy >= 0) {
+                player.y = b.y - player.h; player.vy = 0;
+                player.onGround = true; player.canDoubleJump = true;
+            }
+        }
+    });
+
+    // Gerador de mundo
+    if(world[world.length-1].x < player.x + canvas.width) {
+        let last = world[world.length-1];
+        world.push(createBlock(last.x + 200 + Math.random()*150, Math.min(canvas.height-100, Math.max(200, last.y + (Math.random()*160-80)))));
+    }
+
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+
+    // Renderização
+    ctx.fillStyle = "#4a90e2"; ctx.fillRect(0,0,canvas.width, canvas.height);
+    
+    // Partículas
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.life -= 0.05;
+        ctx.fillStyle = `rgba(255,255,255,${p.life})`;
+        ctx.fillRect(p.x, p.y, 5, 5);
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+
+    world.forEach(b => {
+        ctx.fillStyle = "#6d4c41"; ctx.fillRect(b.x - cameraX, b.y + 10, b.w, b.h);
+        ctx.fillStyle = "#4caf50"; ctx.fillRect(b.x - cameraX, b.y, b.w, 10);
+    });
+
+    // Desenho Personagem
+    let color = "#3a81a7";
+    if(currentSkin === 'alex') color = "#8bc34a";
+    if(currentSkin === 'mrbeast') color = "#00a8ff";
+    if(currentSkin === 'herobrine') color = "#333";
+
+    ctx.fillStyle = color;
+    ctx.fillRect(player.x - cameraX, player.y, player.w, player.h);
+    ctx.fillStyle = "#ffdbac";
+    ctx.fillRect(player.x - cameraX + 5, player.y + 5, 20, 20);
+
+    if(currentSkin === 'herobrine') {
+        ctx.fillStyle = "white";
+        ctx.shadowBlur = 10; ctx.shadowColor = "white";
+        ctx.fillRect(player.x - cameraX + 8, player.y + 10, 4, 4);
+        ctx.fillRect(player.x - cameraX + 18, player.y + 10, 4, 4);
+        ctx.shadowBlur = 0;
+    }
+
+    if(player.y > canvas.height + 200) { gameRunning = false; document.getElementById("menu").style.display = "flex"; }
+    document.getElementById("dist").innerText = distAtual;
+    document.getElementById("coins").innerText = coins;
+    requestAnimationFrame(loop);
+}
+
+// Botões
+document.getElementById("leftBtn").ontouchstart = () => keys.left = true;
+document.getElementById("leftBtn").ontouchend = () => keys.left = false;
+document.getElementById("rightBtn").ontouchstart = () => keys.right = true;
+document.getElementById("rightBtn").ontouchend = () => keys.right = false;
+document.getElementById("jumpBtn").ontouchstart = () => { if(player.onGround || godMode) player.vy = -16; };
+document.getElementById("powerBtn").ontouchstart = handlePower;
+
+window.onkeydown = (e) => {
+    if(e.key === "ArrowLeft") keys.left = true;
+    if(e.key === "ArrowRight") keys.right = true;
+    if(e.key === " ") { if(player.onGround || godMode) player.vy = -17; }
+    if(e.key.toLowerCase() === "w") handlePower();
+};
+window.onkeyup = (e) => { if(e.key === "ArrowLeft") keys.left = false; if(e.key === "ArrowRight") keys.right = false; };
+</script>
+</body>
+</html>
