@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Minecraft Parkour: Beast Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        
+        /* Telas de Menu */
+        #menu, #deathMenu, #shopMenu { 
+            position: absolute; inset: 0; background: #9db9eb; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            z-index: 200; text-align: center; color: white;
+        }
+        #deathMenu, #shopMenu { background: rgba(0,0,0,0.9); display: none; z-index: 300; }
+
+        .btn { width: 260px; padding: 15px; margin: 8px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px #222; }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-menu { background: #757575; }
+        .btn:active { transform: translateY(2px); box-shadow: 0 2px #111; }
+        
+        /* HUD e Barra de Habilidade */
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 12px; border-radius: 8px; z-index: 100; font-size: 14px; border: 1px solid #fff; }
+        #abilityHUD { position: absolute; top: 10px; right: 10px; width: 65px; height: 65px; background: rgba(0,0,0,0.8); border: 3px solid #00e5ff; border-radius: 12px; display: none; z-index: 100; overflow: hidden; }
+        #abilityFill { position: absolute; bottom: 0; width: 100%; background: rgba(0, 229, 255, 0.6); transition: height 0.3s linear; }
+        #abilityText { position: relative; z-index: 2; text-align: center; padding-top: 18px; font-weight: bold; font-size: 20px; text-shadow: 1px 1px #000; }
+
+        /* Grade da Loja */
+        .skin-grid { display: flex; gap: 15px; margin: 20px 0; justify-content: center; flex-wrap: wrap; }
+        .skin-card { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; border: 3px solid transparent; cursor: pointer; min-width: 110px; transition: 0.3s; }
+        .skin-card.active { border-color: #4caf50; background: rgba(76, 175, 80, 0.3); transform: scale(1.05); }
+
+        /* CONTROLOS VIRTUAIS */
+        .controls { position: absolute; bottom: 25px; width: 100%; display: flex; justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 500; pointer-events: none; }
+        .ctrl-group { display: flex; gap: 20px; pointer-events: auto; }
+        .ctrl-btn { 
+            width: 85px; height: 85px; background: rgba(255,255,255,0.2); 
+            border: 3px solid rgba(255,255,255,0.7); border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 35px; color: white; user-select: none; backdrop-filter: blur(4px);
+        }
+        .ctrl-btn:active { background: rgba(255,255,255,0.4); transform: scale(0.9); }
+        .power-btn { border-color: #00e5ff; color: #00e5ff; background: rgba(0, 229, 255, 0.1); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="ui" style="display:none">👤 <span id="skinLabel">STEVE</span> | 🏁 <span id="dist">0</span>m | 💎 <span id="coins">0</span></div>
+    <div id="abilityHUD"><div id="abilityFill"></div><div id="abilityText">W</div></div>
+
+    <div id="menu">
+        <h1 style="text-shadow: 4px 4px #000; font-size: 45px;">BEAST PARKOUR HD</h1>
+        <button class="btn btn-start" onclick="initGame(true)">JOGAR</button>
+        <button class="btn btn-shop" onclick="openShop()">PERSONAGENS 👤</button>
+    </div>
+
+    <div id="shopMenu">
+        <h1>LOJA DE SKINS</h1>
+        <p>Tuas Esmeraldas: 💎 <span id="shopCoins">0</span></p>
+        <div class="skin-grid">
+            <div id="card-steve" class="skin-card" onclick="selectSkin('steve')"><p>STEVE</p><small>Grátis</small></div>
+            <div id="card-alex" class="skin-card" onclick="selectSkin('alex')"><p>ALEX</p><small>Grátis</small></div>
+            <div id="card-herobrine" class="skin-card" onclick="selectSkin('herobrine')"><p>HEROBRINE</p><small id="hPrice">2500 💎</small></div>
+            <div id="card-mrbeast" class="skin-card" onclick="selectSkin('mrbeast')"><p>MRBEAST</p><small id="mPrice">200 💎</small></div>
+        </div>
+        <button class="btn btn-menu" onclick="closeShop()">VOLTAR</button>
+    </div>
+
+    <div id="deathMenu">
+        <h1 style="color:#ff5252; font-size: 40px;">CAÍSTE!</h1>
+        <p id="deathResult"></p>
+        <button class="btn btn-start" onclick="initGame(true)">TENTAR DENOVO</button>
+        <button class="btn btn-menu" onclick="location.reload()">MENU</button>
+    </div>
+
+    <div class="controls" id="gameControls" style="display: none;">
+        <div class="ctrl-group">
+            <div class="ctrl-btn" id="btnLeft">←</div>
+            <div class="ctrl-btn" id="btnRight">→</div>
+        </div>
+        <div class="ctrl-group">
+            <div class="ctrl-btn power-btn" id="btnPower">W</div>
+            <div class="ctrl-btn" id="btnJump">↑</div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, world = {}, cameraX = 0, lastX = 0, animTimer = 0;
+let coins = parseInt(localStorage.getItem("steve_coins")) || 0;
+let highScore = parseInt(localStorage.getItem("steve_record")) || 0;
+let particles = [], gems = [];
+let hasHerobrine = localStorage.getItem("skin_herobrine") === "true";
+let hasMrBeast = localStorage.getItem("skin_mrbeast") === "true";
+let currentSkin = localStorage.getItem("selected_skin") || "steve";
+
+// Configurações de Habilidade
+let abilityReady = true;
+let lastAbilityUseDist = 0;
+const COOLDOWN_METERS = 400;
+
+const player = { x: 100, y: 0, vx: 0, vy: 0, w: 32, h: 64, onGround: false, canDoubleJump: false };
+const input = { left: false, right: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+// Lógica da Loja
+function openShop() {
+    document.getElementById("shopCoins").innerText = coins;
+    document.querySelectorAll('.skin-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('card-' + currentSkin).classList.add('active');
+    document.getElementById('hPrice').innerText = hasHerobrine ? "Comprado" : "2500 💎";
+    document.getElementById('mPrice').innerText = hasMrBeast ? "Comprado" : "200 💎";
+    document.getElementById("shopMenu").style.display = "flex";
+}
+function closeShop() { document.getElementById("shopMenu").style.display = "none"; }
+
+function selectSkin(skin) {
+    if (skin === 'herobrine' && !hasHerobrine && coins >= 2500) {
+        coins -= 2500; hasHerobrine = true;
+        localStorage.setItem("skin_herobrine", "true");
+    } else if (skin === 'mrbeast' && !hasMrBeast && coins >= 200) {
+        coins -= 200; hasMrBeast = true;
+        localStorage.setItem("skin_mrbeast", "true");
+    }
+    if (skin === 'steve' || skin === 'alex' || (skin === 'herobrine' && hasHerobrine) || (skin === 'mrbeast' && hasMrBeast)) {
+        currentSkin = skin;
+        localStorage.setItem("selected_skin", skin);
+        localStorage.setItem("steve_coins", coins);
+    }
+    openShop();
+}
+
+// Gerador de Mundo
+function generateBlocks(startX, count) {
+    let x = startX;
+    let lastY = canvas.height * 0.7;
+    for(let i=0; i<count; i++) {
+        x += 160 + Math.random() * 80;
+        let by = Math.floor((lastY + (Math.random()*120 - 60))/50)*50;
+        by = Math.max(canvas.height*0.3, Math.min(canvas.height*0.8, by));
+        let bx = Math.floor(x/50)*50;
+        world[`${bx},${by}`] = "grass";
+        if(Math.random() > 0.5) gems.push({x: bx+15, y: by-50, collected: false});
+        lastX = bx; lastY = by;
+    }
+}
+
+function createMoneyEffect(x, y) {
+    particles.push({ x, y, vx: Math.random()*2-1, vy: -Math.random()*3, life: 1, text: "$" });
+}
+
+function initGame(reset) {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("deathMenu").style.display = "none";
+    document.getElementById("ui").style.display = "block";
+    document.getElementById("gameControls").style.display = "flex";
+    document.getElementById("skinLabel").innerText = currentSkin.toUpperCase();
+    document.getElementById("abilityHUD").style.display = (currentSkin === 'mrbeast') ? "block" : "none";
+
+    if(reset) {
+        world = {}; gems = []; particles = [];
+        player.x = 100; player.y = 100; player.vx = 0; player.vy = 0;
+        lastX = 0; cameraX = 0; abilityReady = true; lastAbilityUseDist = 0;
+        for(let i=0; i<10; i++) world[`${i*50},${Math.floor(canvas.height*0.75/50)*50}`] = "grass";
+        generateBlocks(500, 15);
+    }
+    gameRunning = true; loop();
+}
+
+function triggerAbility() {
+    let dist = Math.floor(player.x / 50);
+    if (currentSkin === "mrbeast" && !player.onGround && player.canDoubleJump && abilityReady) {
+        player.vy = -15; // Salto duplo
+        player.canDoubleJump = false;
+        abilityReady = false;
+        lastAbilityUseDist = dist;
+        for(let i=0; i<8; i++) createMoneyEffect(player.x+16, player.y+30);
+    }
+}
+
+function loop() {
+    if(!gameRunning) return;
+    animTimer++;
+    let currentDist = Math.floor(player.x / 50);
+    
+    // Cooldown Distância (400m)
+    if(!abilityReady) {
+        let traveled = currentDist - lastAbilityUseDist;
+        let progress = Math.min(1, traveled / COOLDOWN_METERS);
+        document.getElementById("abilityFill").style.height = (100 - (progress * 100)) + "%";
+        if(progress >= 1) {
+            abilityReady = true;
+            document.getElementById("abilityFill").style.height = "0%";
+        }
+    }
+
+    // Input e Física
+    if(input.left) player.vx = -7; else if(input.right) player.vx = 7; else player.vx *= 0.85;
+    player.vy += 0.8; player.x += player.vx; player.y += player.vy;
+
+    // Colisão
+    player.onGround = false;
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(player.x+25 > bx && player.x < bx+50 && player.y+64 > by && player.y+64 < by+20) {
+            if(player.vy > 0) { player.y = by-64; player.vy = 0; player.onGround = true; player.canDoubleJump = true; }
+        }
+    }
+
+    // Gemas
+    gems.forEach(g => {
+        if(!g.collected && player.x < g.x+30 && player.x+32 > g.x && player.y < g.y+30 && player.y+64 > g.y) {
+            g.collected = true; coins++; localStorage.setItem("steve_coins", coins);
+        }
+    });
+
+    if(currentSkin === "mrbeast" && Math.abs(player.vx) > 1 && animTimer % 10 === 0) createMoneyEffect(player.x, player.y+50);
+
+    // Camera e Infinito
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+    if(player.x > lastX - 1200) generateBlocks(lastX, 10);
+    if(player.y > canvas.height + 100) {
+        gameRunning = false;
+        document.getElementById("deathResult").innerText = `Distância: ${currentDist}m`;
+        document.getElementById("deathMenu").style.display = "flex";
+        return;
+    }
+
+    // Desenho
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    
+    // Blocos
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(bx > cameraX - 50 && bx < cameraX + canvas.width) {
+            ctx.fillStyle = "#4caf50"; ctx.fillRect(bx-cameraX, by, 50, 15);
+            ctx.fillStyle = "#795548"; ctx.fillRect(bx-cameraX, by+15, 50, 35);
+        }
+    }
+
+    // Partículas $
+    particles.forEach((p, i) => {
+        p.y += p.vy; p.life -= 0.02; ctx.fillStyle = `rgba(0,255,0,${p.life})`;
+        ctx.font = "bold 20px Arial"; ctx.fillText(p.text, p.x-cameraX, p.y);
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+
+    // Gemas
+    ctx.fillStyle = "#00e5ff";
+    gems.forEach(g => { if(!g.collected) ctx.fillRect(g.x-cameraX, g.y + Math.sin(animTimer*0.1)*5, 15, 15); });
+
+    // Personagem (Cores representativas)
+    let pColor = { steve: "#3aa0a2", alex: "#8bb331", herobrine: "#111", mrbeast: "#0984e3" }[currentSkin];
+    ctx.fillStyle = pColor; ctx.fillRect(player.x-cameraX, player.y, 32, 64);
+    ctx.fillStyle = "#fbc531"; ctx.fillRect(player.x-cameraX+4, player.y+4, 24, 20); // Cabeça
+
+    document.getElementById("dist").innerText = currentDist;
+    document.getElementById("coins").innerText = coins;
+    requestAnimationFrame(loop);
+}
+
+// Controlos
+const bind = (id, start, end) => {
+    const el = document.getElementById(id);
+    const triggerStart = (e) => { e.preventDefault(); start(); };
+    const triggerEnd = (e) => { e.preventDefault(); if(end) end(); };
+    el.addEventListener("touchstart", triggerStart); el.addEventListener("touchend", triggerEnd);
+    el.addEventListener("mousedown", triggerStart); el.addEventListener("mouseup", triggerEnd);
+};
+
+bind("btnLeft", () => input.left = true, () => input.left = false);
+bind("btnRight", () => input.right = true, () => input.right = false);
+bind("btnJump", () => { if(player.onGround) player.vy = -16; });
+bind("btnPower", () => triggerAbility());
+
+window.onkeydown = (e) => {
+    if(e.key === "ArrowLeft") input.left = true; if(e.key === "ArrowRight") input.right = true;
+    if(e.key === " ") if(player.onGround) player.vy = -16;
+    if(e.key.toLowerCase() === "w") triggerAbility();
+};
+window.onkeyup = (e) => {
+    if(e.key === "ArrowLeft") input.left = false; if(e.key === "ArrowRight") input.right = false;
+};
+</script>
+</body>
+</html>
