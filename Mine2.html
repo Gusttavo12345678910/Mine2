@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Beast Parkour Ultra - Deluxe Edition</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #4a90e2; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        canvas { display: block; image-rendering: pixelated; }
+        
+        .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; color: white; text-align: center; backdrop-filter: blur(15px); background: rgba(30, 40, 60, 0.8); }
+        #ui { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.8); color: #00ff00; padding: 12px; border-radius: 8px; z-index: 100; font-family: monospace; border: 2px solid #555; cursor: pointer; }
+        
+        #abilityHUD { position: absolute; top: 15px; right: 15px; width: 140px; height: 35px; background: rgba(0,0,0,0.8); border: 2px solid #fff; border-radius: 8px; z-index: 100; display: none; overflow: hidden; }
+        #abilityFill { position: absolute; left: 0; height: 100%; width: 100%; background: #00e5ff; transition: width 0.1s; }
+        #abilityText { position: relative; width: 100%; text-align: center; line-height: 35px; font-weight: bold; font-size: 13px; }
+
+        .btn { width: 260px; padding: 15px; margin: 10px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; text-transform: uppercase; transition: 0.2s; box-shadow: 0 4px #222; }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-admin { background: #f44336; border-bottom: 4px solid #800; }
+
+        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 50px; box-sizing: border-box; z-index: 500; pointer-events: none; }
+        .ctrl-group { display: flex; gap: 25px; pointer-events: auto; }
+        .ctrl-btn { width: 85px; height: 85px; background: rgba(255,255,255,0.15); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 35px; color: white; user-select: none; backdrop-filter: blur(5px); }
+    </style>
+</head>
+<body>
+
+    <div id="ui">DISTÂNCIA: <span id="dist">0</span>m | 💎 <span id="coins">0</span></div>
+    
+    <div id="abilityHUD">
+        <div id="abilityFill"></div>
+        <div id="abilityText">PODER (W)</div>
+    </div>
+
+    <div id="adminPanel" class="overlay" style="display:none; background: rgba(20,0,0,0.95);">
+        <h1 style="color:#ff4444; text-shadow: 2px 2px #000;">TERMINAL ADMIN GU24</h1>
+        <button class="btn btn-admin" onclick="addGems()">+1 MILHÃO DE GEMAS 💎</button>
+        <button class="btn btn-admin" onclick="toggleGodMode()">MODO DEUS (VOAR): <span id="godStatus">OFF</span></button>
+        <p>Voo: W/Espaço sobe, S desce.</p>
+        <button class="btn" style="background:#555" onclick="document.getElementById('adminPanel').style.display='none'">FECHAR</button>
+    </div>
+
+    <div id="menu" class="overlay">
+        <h1 style="font-size: 45px; text-shadow: 4px 4px #000;">BEAST PARKOUR HD</h1>
+        <p>Texturas Deluxe Ativadas</p>
+        <button class="btn btn-start" onclick="startGame()">JOGAR</button>
+        <button class="btn btn-shop" onclick="openShop()">PERSONAGENS</button>
+    </div>
+
+    <div id="shop" class="overlay" style="display:none">
+        <h2>ESCOLHER SKIN</h2>
+        <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin: 20px;">
+            <button class="btn" style="background:#2c3e50" onclick="selectSkin('steve')">STEVE</button>
+            <button class="btn" style="background:#e67e22" onclick="selectSkin('alex')">ALEX</button>
+            <button class="btn" style="background:#00a8ff" onclick="selectSkin('mrbeast')">MRBEAST</button>
+            <button class="btn" style="background:#111" onclick="selectSkin('herobrine')">HEROBRINE</button>
+        </div>
+        <button class="btn" style="background:#777" onclick="document.getElementById('shop').style.display='none'">VOLTAR</button>
+    </div>
+
+    <div class="controls" id="gameControls" style="display:none">
+        <div class="ctrl-group">
+            <div class="ctrl-btn" id="leftBtn">←</div>
+            <div class="ctrl-btn" id="rightBtn">→</div>
+        </div>
+        <div class="ctrl-group">
+            <div class="ctrl-btn" style="color:#00e5ff; border-color:#00e5ff" id="powerBtn">W</div>
+            <div class="ctrl-btn" id="jumpBtn">↑</div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, world = [], cameraX = 0, coins = parseInt(localStorage.getItem("coins")) || 0;
+let currentSkin = localStorage.getItem("skin") || "steve";
+let godMode = false, particles = [];
+
+// Habilidades
+let lastUseDist = -200;
+const DASH_COOLDOWN = 200; 
+const DASH_DISTANCE = 1000; 
+
+const player = { x: 100, y: 100, vx: 0, vy: 0, w: 30, h: 60, onGround: false, canDoubleJump: false, anim: 0 };
+const keys = { left: false, right: false, up: false, down: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.onresize = resize; resize();
+
+// --- ADMIN COM SENHA ---
+let adminClicks = 0;
+function tryAdmin() {
+    let email = prompt("E-mail Admin:");
+    if(email === "gu24gamer@gmail.com") {
+        let senha = prompt("Senha de Segurança:");
+        if(senha === "gu_totoso_24/11/2015") {
+            document.getElementById("adminPanel").style.display = "flex";
+        } else { alert("Senha Incorreta!"); }
+    } else { alert("E-mail não reconhecido."); }
+}
+
+document.getElementById("ui").onclick = () => {
+    adminClicks++;
+    if(adminClicks >= 5) { tryAdmin(); adminClicks = 0; }
+};
+
+function addGems() { coins += 1000000; save(); alert("Gemas Adicionadas!"); }
+function toggleGodMode() { godMode = !godMode; document.getElementById("godStatus").innerText = godMode ? "ON" : "OFF"; }
+function save() { localStorage.setItem("coins", coins); localStorage.setItem("skin", currentSkin); }
+
+function openShop() { document.getElementById("shop").style.display = "flex"; }
+function selectSkin(s) { currentSkin = s; save(); document.getElementById("shop").style.display = "none"; }
+
+function createParticles(x, y, color) {
+    for(let i=0; i<15; i++) particles.push({x, y, vx:Math.random()*8-4, vy:Math.random()*8-4, life:1, color});
+}
+
+function createBlock(x, y) { return { x, y, w: 50, h: 600 }; }
+
+function startGame() {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("gameControls").style.display = "flex";
+    world = [];
+    world.push(createBlock(100, canvas.height - 150));
+    world.push(createBlock(450, canvas.height - 150));
+    player.x = 110; player.y = canvas.height - 300; player.vx = 0; player.vy = 0;
+    lastUseDist = -200;
+    gameRunning = true; loop();
+}
+
+function handlePower() {
+    let d = Math.floor(player.x / 50);
+    if(currentSkin === "herobrine" && (d - lastUseDist) >= DASH_COOLDOWN && !player.onGround) {
+        createParticles(player.x - cameraX, player.y + 30, "white");
+        player.x += DASH_DISTANCE;
+        lastUseDist = d;
+        player.vy = -2;
+        createParticles(player.x - cameraX, player.y + 30, "white");
+    } else if(currentSkin === "mrbeast" && !player.onGround && player.canDoubleJump) {
+        player.vy = -16;
+        player.canDoubleJump = false;
+        createParticles(player.x - cameraX, player.y + 30, "#00ff00");
+    }
+}
+
+// --- DESENHO DE PERSONAGENS MELHORADOS ---
+function drawPlayer(x, y) {
+    let px = x - cameraX;
+    let py = y;
+    let walk = Math.sin(player.anim) * 10;
+    
+    let colors = {
+        steve: { body: "#3a81a7", pants: "#4e3b2f", skin: "#ffdbac", hair: "#5d3c31" },
+        alex: { body: "#4caf50", pants: "#6d4c41", skin: "#ffdbac", hair: "#e67e22" },
+        mrbeast: { body: "#00a8ff", pants: "#222", skin: "#ffdbac", hair: "#111" },
+        herobrine: { body: "#333", pants: "#111", skin: "#ffdbac", hair: "#5d3c31" }
+    }[currentSkin];
+
+    // Pernas
+    ctx.fillStyle = colors.pants;
+    ctx.fillRect(px + 5, py + 40, 10, 20 + (player.onGround ? 0 : 5)); 
+    ctx.fillRect(px + 15, py + 40, 10, 20 + (player.onGround ? 0 : 5));
+
+    // Corpo e Braços
+    ctx.fillStyle = colors.body;
+    ctx.fillRect(px + 5, py + 20, 20, 20); // Tronco
+    ctx.fillRect(px - 2, py + 20, 7, 18); // Braço L
+    ctx.fillRect(px + 25, py + 20, 7, 18); // Braço R
+
+    // Cabeça
+    ctx.fillStyle = colors.skin;
+    ctx.fillRect(px + 5, py, 20, 20);
+    
+    // Cabelo
+    ctx.fillStyle = colors.hair;
+    ctx.fillRect(px + 5, py, 20, 5);
+    
+    // Olhos
+    if(currentSkin === 'herobrine') {
+        ctx.fillStyle = "white"; ctx.shadowBlur = 8; ctx.shadowColor = "white";
+        ctx.fillRect(px + 8, py + 8, 4, 4); ctx.fillRect(px + 18, py + 8, 4, 4);
+        ctx.shadowBlur = 0;
+    } else {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(px + 8, py + 8, 3, 3); ctx.fillRect(px + 19, py + 8, 3, 3);
+    }
+}
+
+function loop() {
+    if(!gameRunning) return;
+    let distAtual = Math.floor(player.x / 50);
+    if(Math.abs(player.vx) > 1) player.anim += 0.2;
+
+    const hud = document.getElementById("abilityHUD");
+    if(currentSkin === "herobrine" || currentSkin === "mrbeast") {
+        hud.style.display = "block";
+        let p = Math.min(1, (distAtual - lastUseDist) / DASH_COOLDOWN);
+        document.getElementById("abilityFill").style.width = (p * 100) + "%";
+        document.getElementById("abilityFill").style.background = p >= 1 ? "#00e5ff" : "#ffcc00";
+    }
+
+    if(keys.left) player.vx = -8; else if(keys.right) player.vx = 8; else player.vx *= 0.8;
+    if(godMode) {
+        if(keys.up) player.vy = -10; else if(keys.down) player.vy = 10; else player.vy = 0;
+    } else { player.vy += 0.85; }
+
+    player.x += player.vx; player.y += player.vy;
+
+    player.onGround = false;
+    world.forEach(b => {
+        if(player.x + player.w > b.x && player.x < b.x + b.w && 
+           player.y + player.h <= b.y && player.y + player.h + player.vy >= b.y) {
+            if(player.vy >= 0 && !godMode) {
+                player.y = b.y - player.h; player.vy = 0;
+                player.onGround = true; player.canDoubleJump = true;
+            }
+        }
+    });
+
+    if(world[world.length-1].x < player.x + canvas.width) {
+        let last = world[world.length-1];
+        let gap = 220 + Math.random() * 150;
+        let newY = Math.max(200, Math.min(canvas.height - 150, last.y + (Math.random()*180-90)));
+        world.push(createBlock(last.x + gap, newY));
+    }
+
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+
+    ctx.fillStyle = "#87ceeb"; ctx.fillRect(0,0,canvas.width, canvas.height);
+    world.forEach(b => {
+        ctx.fillStyle = "#5d3c31"; ctx.fillRect(b.x - cameraX, b.y + 10, b.w, b.h);
+        ctx.fillStyle = "#4caf50"; ctx.fillRect(b.x - cameraX, b.y, b.w, 12);
+        ctx.fillStyle = "rgba(0,0,0,0.1)"; ctx.fillRect(b.x - cameraX, b.y + 12, b.w, 5);
+    });
+
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.life -= 0.04;
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+        ctx.fillRect(p.x, p.y, 4, 4);
+        if(p.life <= 0) particles.splice(i, 1);
+    });
+    ctx.globalAlpha = 1;
+
+    drawPlayer(player.x, player.y);
+
+    if(player.y > canvas.height + 200) { gameRunning = false; document.getElementById("menu").style.display = "flex"; }
+    document.getElementById("dist").innerText = distAtual;
+    document.getElementById("coins").innerText = coins;
+    requestAnimationFrame(loop);
+}
+
+const bind = (id, start, end) => {
+    let el = document.getElementById(id);
+    el.addEventListener("touchstart", (e) => { e.preventDefault(); start(); });
+    el.addEventListener("touchend", (e) => { e.preventDefault(); end(); });
+};
+bind("leftBtn", () => keys.left = true, () => keys.left = false);
+bind("rightBtn", () => keys.right = true, () => keys.right = false);
+bind("jumpBtn", () => keys.up = true, () => keys.up = false);
+document.getElementById("powerBtn").ontouchstart = (e) => { e.preventDefault(); handlePower(); };
+
+window.onkeydown = (e) => {
+    if(e.key.toLowerCase() === "p") tryAdmin();
+    if(e.key === "ArrowLeft") keys.left = true;
+    if(e.key === "ArrowRight") keys.right = true;
+    if(e.key === " " || e.key === "ArrowUp") keys.up = true;
+    if(e.key.toLowerCase() === "s" || e.key === "ArrowDown") keys.down = true;
+    if(e.key.toLowerCase() === "w") handlePower();
+};
+window.onkeyup = (e) => {
+    if(e.key === "ArrowLeft") keys.left = false;
+    if(e.key === "ArrowRight") keys.right = false;
+    if(e.key === " " || e.key === "ArrowUp") keys.up = false;
+    if(e.key.toLowerCase() === "s" || e.key === "ArrowDown") keys.down = false;
+};
+</script>
+</body>
+</html>
