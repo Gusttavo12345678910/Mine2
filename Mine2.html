@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour HD - Perfil Update</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        
+        /* Telas */
+        .overlay { 
+            position: absolute; inset: 0; background: #9db9eb; 
+            display: none; flex-direction: column; align-items: center; justify-content: center; 
+            z-index: 200; text-align: center;
+        }
+
+        /* Garantir que o Menu Principal apareça primeiro */
+        #menu { display: flex; }
+
+        #deathMenu, #shopMenu, #adminMenu, #nameScreen, #profileMenu { 
+            background: rgba(0,0,0,0.95); color: white; z-index: 300; 
+        }
+
+        #adminMenu { z-index: 500; border: 4px solid #ff0000; }
+        .admin-input, .name-input { padding: 12px; margin: 8px; border-radius: 8px; border: 1px solid #00e5ff; width: 280px; background: #222; color: white; font-size: 16px; }
+
+        .btn { width: 280px; padding: 15px; margin: 6px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px #222; }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-menu { background: #757575; }
+        
+        /* Botão Perfil no Canto */
+        #mainProfileBtn { 
+            position: absolute; top: 15px; left: 15px; width: 120px; 
+            background: #2196f3; z-index: 400; font-size: 14px; padding: 10px; 
+            border-radius: 10px; border: none; color: white; font-weight: bold; cursor: pointer;
+        }
+        
+        #ui { position: absolute; top: 10px; left: 150px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px; z-index: 100; display: none; font-size: 14px; border: 1px solid #fff; }
+        #abilityHUD { position: absolute; top: 10px; right: 10px; width: 70px; height: 70px; background: rgba(0,0,0,0.8); border: 2px solid #00e5ff; border-radius: 10px; display: none; z-index: 100; overflow: hidden; }
+        #abilityFill { position: absolute; bottom: 0; width: 100%; background: rgba(0, 229, 255, 0.5); transition: height 0.2s; }
+        
+        .profile-card { background: #333; padding: 20px; border-radius: 20px; border: 2px solid #00e5ff; min-width: 300px; }
+        .edit-btn { cursor: pointer; color: #00e5ff; font-size: 20px; margin-left: 10px; }
+
+        #checkpointMsg { position: absolute; top: 20%; width: 100%; text-align: center; color: #00e5ff; font-size: 32px; font-weight: bold; display: none; text-shadow: 3px 3px #000; z-index: 150; pointer-events: none; }
+
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 150; }
+        .ctrl-btn { width: 70px; height: 70px; background: rgba(255,255,255,0.2); border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 25px; color: white; user-select: none; }
+        .power-btn { background: rgba(0, 229, 255, 0.3); border-color: #00e5ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <button id="mainProfileBtn" onclick="openProfile()">👤 PERFIL</button>
+
+    <div id="checkpointMsg">CHECKPOINT! 🚩</div>
+
+    <div id="menu" class="overlay">
+        <h1 style="color:white; text-shadow: 3px 3px #000; margin: 10px; font-size: 40px;">STEVE PARKOUR HD</h1>
+        <button class="btn btn-start" onclick="checkNameBeforeStart()">JOGAR</button>
+        <button class="btn btn-shop" onclick="openShop()">LOJA SKINS 🛒</button>
+    </div>
+
+    <div id="nameScreen" class="overlay">
+        <h1>COMO SE CHAMA?</h1>
+        <input type="text" id="userNameInput" class="name-input" placeholder="Digite seu nome...">
+        <button class="btn btn-start" onclick="saveNameAndStart()">CONFIRMAR</button>
+    </div>
+
+    <div id="profileMenu" class="overlay">
+        <div class="profile-card">
+            <h2>SEU PERFIL</h2>
+            <p style="font-size: 22px;">
+                <span id="displayUserName">Jogador</span> 
+                <span class="edit-btn" onclick="editName()">✏️</span>
+            </p>
+            <p>🏆 Recorde: <span id="profileBest">0</span>m</p>
+            <p>💎 Esmeraldas: <span id="profileCoins">0</span></p>
+            <button class="btn btn-menu" onclick="closeProfile()">VOLTAR</button>
+        </div>
+    </div>
+
+    <div id="adminMenu" class="overlay">
+        <h1 style="color: #ff0000;">🛡️ ADMIN</h1>
+        <div id="adminLogin">
+            <input type="email" id="adminEmail" class="admin-input" placeholder="E-mail">
+            <input type="password" id="adminPass" class="admin-input" placeholder="Senha">
+            <button class="btn btn-start" onclick="checkAdminLogin()">ENTRAR</button>
+        </div>
+        <div id="adminControls" style="display: none;">
+            <button class="btn btn-shop" onclick="adminAddGems()">+10.000 GEMS 💎</button>
+            <button class="btn btn-menu" onclick="adminToggleGod()">GOD MODE: <span id="godStatus">OFF</span></button>
+            <button class="btn btn-menu" onclick="closeAdmin()">SAIR</button>
+        </div>
+        <button class="btn btn-menu" id="adminBackBtn" onclick="closeAdmin()">FECHAR</button>
+    </div>
+
+    <div id="shopMenu" class="overlay">
+        <h1>LOJA</h1>
+        <p>💎 <span id="shopCoins">0</span></p>
+        <button id="buyHeroBtn" class="btn btn-shop" onclick="handleSkinAction()">HEROBRINE (2.500 💎)</button>
+        <button class="btn btn-menu" onclick="closeShop()">VOLTAR</button>
+    </div>
+
+    <div id="ui">👤 <span id="skinLabel">Steve</span> | <span id="adminTrigger" onclick="handleAdminTrigger()">🏁 <span id="dist">0</span>m</span> | 💎 <span id="coins">0</span></div>
+    
+    <div id="abilityHUD"><div id="abilityFill"></div></div>
+
+    <div id="deathMenu" class="overlay">
+        <h1>FIM DE JOGO</h1>
+        <p id="deathResult"></p>
+        <button class="btn btn-start" onclick="initGame(false)">CHECKPOINT 🚩</button>
+        <button class="btn btn-menu" onclick="location.reload()">MENU</button>
+    </div>
+
+    <div class="controls" id="mobileControls">
+        <div style="display: flex; gap: 15px;"><div class="ctrl-btn" id="btnLeft">←</div><div class="ctrl-btn" id="btnRight">→</div></div>
+        <div style="display: flex; gap: 15px;"><div class="ctrl-btn power-btn" id="btnPower">W</div><div class="ctrl-btn" id="btnJump">↑</div></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, physicsActive = false, world = {}, cameraX = 0, lastX = 0;
+let coins = parseInt(localStorage.getItem("steve_coins")) || 0;
+let highScore = parseInt(localStorage.getItem("steve_record")) || 0;
+let userName = localStorage.getItem("steve_user_name") || "";
+let hasHerobrine = localStorage.getItem("skin_herobrine") === "true", currentSkin = "steve";
+let gems = [], abilityReady = true, blocksLeftToPlace = 0, lastUsedDist = 0;
+let adminClicks = 0, lastClickTime = 0, isGodMode = false;
+let lastCheckpoint = { x: 100, y: 0 }, checkpointsAchieved = [];
+let GRAV_UP = 0.7, GRAV_DOWN = 0.82, JUMP_FORCE = -17.5, SPEED = 6.5;
+const player = { x: 100, y: 0, w: 32, h: 64, vx: 0, vy: 0, onGround: false };
+const input = { left: false, right: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+// NOME E PERFIL
+function checkNameBeforeStart() {
+    if (userName === "") document.getElementById("nameScreen").style.display = "flex";
+    else initGame(true);
+}
+function saveNameAndStart() {
+    let val = document.getElementById("userNameInput").value.trim();
+    if (val.length < 2) return alert("Nome curto!");
+    userName = val; localStorage.setItem("steve_user_name", userName);
+    document.getElementById("nameScreen").style.display = "none";
+    initGame(true);
+}
+function openProfile() {
+    document.getElementById("displayUserName").innerText = userName || "Jogador";
+    document.getElementById("profileBest").innerText = highScore;
+    document.getElementById("profileCoins").innerText = coins;
+    document.getElementById("profileMenu").style.display = "flex";
+}
+function closeProfile() { document.getElementById("profileMenu").style.display = "none"; }
+function editName() {
+    let n = prompt("Novo nome:", userName);
+    if(n && n.trim().length >= 2) { userName = n.trim(); localStorage.setItem("steve_user_name", userName); openProfile(); }
+}
+
+// ADMIN
+function handleAdminTrigger() {
+    let now = Date.now();
+    if (now - lastClickTime < 500) adminClicks++; else adminClicks = 1;
+    lastClickTime = now;
+    if (adminClicks >= 5) { document.getElementById("adminMenu").style.display = "flex"; adminClicks = 0; }
+}
+function checkAdminLogin() {
+    if (document.getElementById("adminEmail").value === "gu24gamer@gmail.com" && document.getElementById("adminPass").value === "gu_totoso_24/11/2015") {
+        document.getElementById("adminLogin").style.display = "none";
+        document.getElementById("adminControls").style.display = "block";
+    } else alert("Senha incorreta!");
+}
+function closeAdmin() { document.getElementById("adminMenu").style.display = "none"; }
+function adminAddGems() { coins += 10000; document.getElementById("coins").innerText = coins; }
+function adminToggleGod() { isGodMode = !isGodMode; document.getElementById("godStatus").innerText = isGodMode ? "ON" : "OFF"; }
+
+// GAME LOGIC
+function generateBlocks(startX, count) {
+    let x = startX; let lastY = canvas.height * 0.6;
+    for(let i = 0; i < count; i++) {
+        x += 150 + Math.random() * 70;
+        let newY = Math.max(canvas.height * 0.35, Math.min(canvas.height * 0.75, lastY + (Math.random() * 100 - 50)));
+        let bx = Math.floor(x/50)*50, by = Math.floor(newY/50)*50;
+        if (Math.floor(bx/50) % 80 === 0) world[`${bx},${by}`] = "checkpoint";
+        else world[`${bx},${by}`] = "grass";
+        if (Math.random() > 0.5) gems.push({ x: bx + 15, y: by - 60, collected: false });
+        lastX = x; lastY = by;
+    }
+}
+
+function initGame(resetAll) {
+    document.querySelectorAll(".overlay").forEach(el => el.style.display = "none");
+    document.getElementById("mainProfileBtn").style.display = "none";
+    document.getElementById("ui").style.display = "block";
+    if (resetAll) {
+        world = {}; gems = []; checkpointsAchieved = [];
+        lastCheckpoint = { x: 100, y: canvas.height * 0.7 };
+        for(let i=0; i<8; i++) world[`${i*50},${Math.floor(canvas.height*0.75/50)*50}`] = "grass";
+        generateBlocks(500, 15);
+    }
+    player.x = lastCheckpoint.x; player.y = lastCheckpoint.y - 100;
+    player.vy = 0; physicsActive = false; gameRunning = true;
+    if ('ontouchstart' in window) document.getElementById("mobileControls").style.display = "flex";
+    requestAnimationFrame(loop);
+}
+
+function loop() {
+    if(!gameRunning) return;
+    if(physicsActive) {
+        if(input.left) player.vx = -SPEED; else if(input.right) player.vx = SPEED; else player.vx *= 0.8;
+        player.vy += (player.vy < 0) ? GRAV_UP : GRAV_DOWN;
+        player.x += player.vx; player.y += player.vy;
+        player.onGround = false;
+
+        for(let pos in world) {
+            let [bx, by] = pos.split(",").map(Number);
+            if(player.x + player.w > bx && player.x < bx + 50 && player.y + player.h > by && player.y + player.h < by + 20 && player.vy > 0) {
+                player.y = by - player.h; player.vy = 0; player.onGround = true;
+                if(world[pos] === "checkpoint" && !checkpointsAchieved.includes(pos)) {
+                    lastCheckpoint = { x: bx, y: by }; checkpointsAchieved.push(pos);
+                    document.getElementById("checkpointMsg").style.display = "block";
+                    setTimeout(() => document.getElementById("checkpointMsg").style.display = "none", 1000);
+                }
+            }
+        }
+
+        gems.forEach(g => { if(!g.collected && player.x < g.x+20 && player.x+32 > g.x && player.y < g.y+30 && player.y+64 > g.y) { g.collected = true; coins++; document.getElementById("coins").innerText = coins; } });
+
+        if(player.y > canvas.height + 100) {
+            if(isGodMode) { player.y = -50; player.vy = 0; }
+            else { 
+                gameRunning = false; highScore = Math.max(highScore, Math.floor(player.x/50));
+                localStorage.setItem("steve_record", highScore); localStorage.setItem("steve_coins", coins);
+                document.getElementById("deathMenu").style.display = "flex"; 
+                document.getElementById("mainProfileBtn").style.display = "block";
+                return; 
+            }
+        }
+        cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+        if(player.x > lastX - 1000) generateBlocks(lastX, 10);
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(bx > cameraX - 50 && bx < cameraX + canvas.width) {
+            ctx.fillStyle = world[pos] === "checkpoint" ? "#00e5ff" : "#795548";
+            ctx.fillRect(bx - cameraX, by, 50, 50);
+            if(world[pos] === "grass") { ctx.fillStyle = "#4caf50"; ctx.fillRect(bx - cameraX, by, 50, 15); }
+        }
+    }
+    gems.forEach(g => { if(!g.collected) { ctx.fillStyle = "#00ff00"; ctx.fillRect(g.x-cameraX, g.y, 20, 20); } });
+    
+    ctx.fillStyle = (currentSkin === "herobrine") ? "#111" : "#3c44aa";
+    ctx.fillRect(player.x - cameraX, player.y, 32, 64);
+
+    document.getElementById("dist").innerText = Math.floor(player.x/50);
+    requestAnimationFrame(loop);
+}
+
+function openShop() { document.getElementById("shopCoins").innerText = coins; document.getElementById("shopMenu").style.display = "flex"; }
+function closeShop() { document.getElementById("shopMenu").style.display = "none"; }
+function handleSkinAction() { if(!hasHerobrine && coins >= 2500) { coins -= 2500; hasHerobrine = true; currentSkin = "herobrine"; localStorage.setItem("skin_herobrine", "true"); } else if(hasHerobrine) currentSkin = (currentSkin === "herobrine") ? "steve" : "herobrine"; closeShop(); }
+
+window.addEventListener("keydown", (e) => { 
+    if(e.code === "Space" || e.code === "ArrowUp") { physicsActive = true; if(player.onGround) player.vy = JUMP_FORCE; }
+    if(e.code === "KeyA" || e.code === "ArrowLeft") { physicsActive = true; input.left = true; }
+    if(e.code === "KeyD" || e.code === "ArrowRight") { physicsActive = true; input.right = true; }
+});
+window.addEventListener("keyup", (e) => { if(e.code === "KeyA" || e.code === "ArrowLeft") input.left = false; if(e.code === "KeyD" || e.code === "ArrowRight") input.right = false; });
+
+const bind = (id, fn) => document.getElementById(id).addEventListener("touchstart", (e) => { e.preventDefault(); fn(); });
+bind("btnLeft", () => { physicsActive = true; input.left = true; }); 
+document.getElementById("btnLeft").addEventListener("touchend", () => input.left = false);
+bind("btnRight", () => { physicsActive = true; input.right = true; }); 
+document.getElementById("btnRight").addEventListener("touchend", () => input.right = false);
+bind("btnJump", () => { physicsActive = true; if(player.onGround) player.vy = JUMP_FORCE; });
+</script>
+</body>
+</html>
