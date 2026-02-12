@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour HD - MrBeast Upgrade</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; }
+        .overlay { position: absolute; inset: 0; background: #9db9eb; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 500; text-align: center; }
+        #deathMenu, #shopMenu, #adminMenu, #nameScreen, #profileMenu, #rankMenu { background: rgba(0,0,0,0.9); color: white; }
+        .btn { width: 280px; padding: 15px; margin: 10px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; pointer-events: auto; box-shadow: 0 4px #222; }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-rank { background: #ff9800; }
+        .btn-menu { background: #757575; }
+        .name-input, .admin-input { padding: 12px; margin: 8px; border-radius: 8px; border: 1px solid #00e5ff; width: 260px; }
+        #mainProfileBtn { position: absolute; top: 15px; left: 15px; width: 120px; background: #2196f3; z-index: 1000; padding: 10px; border-radius: 10px; border: none; color: white; font-weight: bold; cursor: pointer; }
+        #ui { position: absolute; top: 10px; left: 150px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px; z-index: 100; display: none; border: 1px solid #fff; }
+        .rank-card { background: #333; padding: 20px; border-radius: 20px; border: 2px solid #ff9800; width: 85%; max-width: 450px; }
+        table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #444; }
+        .highlight { color: #00e5ff; font-weight: bold; }
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 150; }
+        .ctrl-btn { width: 70px; height: 70px; background: rgba(255,255,255,0.3); border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 25px; color: white; }
+        #abilityStatus { color: #00ff00; font-weight: bold; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+    <button id="mainProfileBtn" onclick="openProfile()">👤 PERFIL</button>
+
+    <div id="menu" class="overlay" style="display: flex;">
+        <h1 style="color:white; text-shadow: 3px 3px #000; font-size: 40px;">STEVE PARKOUR</h1>
+        <button class="btn btn-start" onclick="checkNameBeforeStart()">JOGAR</button>
+        <button class="btn btn-shop" onclick="openShop()">LOJA SKINS 🛒</button>
+        <button class="btn btn-rank" onclick="openRank()">PLACAR 🪧</button>
+    </div>
+
+    <div id="rankMenu" class="overlay">
+        <div class="rank-card">
+            <h2>RANKING LOCAL</h2>
+            <table>
+                <thead><tr><th>Pos</th><th>Nome</th><th>💎</th><th>Metros</th></tr></thead>
+                <tbody id="rankBody"></tbody>
+            </table>
+            <button class="btn btn-menu" onclick="closeRank()">VOLTAR</button>
+        </div>
+    </div>
+
+    <div id="shopMenu" class="overlay">
+        <h1>LOJA</h1>
+        <p>💎 <span id="shopCoins">0</span></p>
+        <button id="btnHero" class="btn btn-shop" onclick="handleSkinAction('herobrine')">HEROBRINE (2500 💎)</button>
+        <button id="btnBeast" class="btn btn-shop" style="background:#2196f3" onclick="handleSkinAction('mrbeast')">MR BEAST (250 💎)</button>
+        <button class="btn btn-menu" onclick="closeShop()">VOLTAR</button>
+    </div>
+
+    <div id="nameScreen" class="overlay">
+        <h1>QUAL SEU NOME?</h1>
+        <input type="text" id="userNameInput" class="name-input" placeholder="Seu nome aqui...">
+        <button class="btn btn-start" onclick="saveNameAndStart()">CONFIRMAR</button>
+    </div>
+
+    <div id="profileMenu" class="overlay">
+        <div class="rank-card" style="border-color:#2196f3">
+            <h2>SEU PERFIL</h2>
+            <p>Nome: <span id="displayUserName"></span> <span onclick="editName()" style="cursor:pointer">✏️</span></p>
+            <p>Recorde: <span id="profileBest">0</span>m</p>
+            <p>Esmeraldas: 💎 <span id="profileCoins">0</span></p>
+            <button class="btn btn-menu" onclick="closeProfile()">VOLTAR</button>
+        </div>
+    </div>
+
+    <div id="adminMenu" class="overlay">
+        <h1 style="color:red">ADMIN</h1>
+        <div id="adminLogin">
+            <input type="email" id="adminEmail" class="admin-input" placeholder="E-mail">
+            <input type="password" id="adminPass" class="admin-input" placeholder="Senha">
+            <button class="btn btn-start" onclick="checkAdminLogin()">ENTRAR</button>
+        </div>
+        <div id="adminControls" style="display:none">
+            <button class="btn btn-shop" onclick="adminAddGems()">+10.000 GEMS</button>
+            <button class="btn btn-menu" onclick="adminToggleGod()">GOD MODE: <span id="godStatus">OFF</span></button>
+            <button class="btn btn-menu" onclick="closeAdmin()">SAIR</button>
+        </div>
+    </div>
+
+    <div id="deathMenu" class="overlay">
+        <h1>FIM DE JOGO</h1>
+        <button class="btn btn-start" onclick="initGame(false)">RECOMEÇAR 🚩</button>
+        <button class="btn btn-menu" onclick="location.reload()">MENU</button>
+    </div>
+
+    <div id="ui">
+        👤 <span id="skinLabel">STEVE</span> | 
+        <span onclick="handleAdminTrigger()">🏁 <span id="dist">0</span>m</span> | 
+        💎 <span id="coins">0</span>
+        <span id="abilityStatus"></span>
+    </div>
+    <div id="checkpointMsg" style="position:absolute; top:20%; width:100%; text-align:center; color:#00ff00; font-size:30px; display:none; z-index:1000;">CHECKPOINT!</div>
+
+    <div class="controls" id="mobileControls">
+        <div style="display:flex; gap:15px"><div class="ctrl-btn" id="btnLeft">←</div><div class="ctrl-btn" id="btnRight">→</div></div>
+        <div class="ctrl-btn" id="btnJump">↑</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, physicsActive = false, world = {}, cameraX = 0;
+let coins = parseInt(localStorage.getItem("steve_coins")) || 0;
+let highScore = parseInt(localStorage.getItem("steve_record")) || 0;
+let userName = localStorage.getItem("steve_user_name") || "";
+let hasHerobrine = localStorage.getItem("skin_herobrine") === "true";
+let hasMrBeast = localStorage.getItem("skin_mrbeast") === "true";
+let currentSkin = "steve";
+let gems = [], lastCheckpoint = { x: 100, y: 0 }, checkpointsAchieved = [], lastGeneratedX = 0;
+let adminClicks = 0, lastClickTime = 0, isGodMode = false;
+
+// Variáveis da Habilidade MrBeast
+let canDoubleJump = true;
+let doubleJumpUsedInAir = false;
+let metersAtLastDoubleJump = 0;
+
+const player = { x: 100, y: 0, w: 32, h: 64, vx: 0, vy: 0, onGround: false };
+const input = { left: false, right: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+function updateLocalRanking() {
+    if (!userName) return;
+    let ranking = JSON.parse(localStorage.getItem("steve_ranking") || "[]");
+    let userIndex = ranking.findIndex(u => u.name === userName);
+    if (userIndex > -1) {
+        ranking[userIndex].best = Math.max(ranking[userIndex].best, highScore);
+        ranking[userIndex].gems = Math.max(ranking[userIndex].gems, coins);
+    } else { ranking.push({ name: userName, best: highScore, gems: coins }); }
+    ranking.sort((a, b) => b.best - a.best);
+    localStorage.setItem("steve_ranking", JSON.stringify(ranking.slice(0, 10)));
+}
+
+function openRank() {
+    updateLocalRanking();
+    let ranking = JSON.parse(localStorage.getItem("steve_ranking") || "[]");
+    let html = "";
+    if (ranking.length === 0) { html = "<tr><td colspan='4'>Nenhum jogador!</td></tr>"; } 
+    else { ranking.forEach((p, i) => {
+            let isMe = (p.name === userName);
+            html += `<tr class="${isMe?'highlight':''}"><td>#${i+1}</td><td>${p.name}</td><td>${p.gems}</td><td>${p.best}m</td></tr>`;
+        });
+    }
+    document.getElementById("rankBody").innerHTML = html;
+    document.getElementById("rankMenu").style.display = "flex";
+}
+function closeRank() { document.getElementById("rankMenu").style.display = "none"; }
+
+function checkNameBeforeStart() {
+    if (userName === "") document.getElementById("nameScreen").style.display = "flex";
+    else initGame(true);
+}
+function saveNameAndStart() {
+    let val = document.getElementById("userNameInput").value.trim();
+    if (val.length < 2) return alert("Nome curto!");
+    userName = val; localStorage.setItem("steve_user_name", userName);
+    document.getElementById("nameScreen").style.display = "none";
+    initGame(true);
+}
+
+function openShop() {
+    document.getElementById("shopCoins").innerText = coins;
+    document.getElementById("btnHero").innerText = hasHerobrine ? (currentSkin==="herobrine"?"EQUIPADO":"EQUIPAR") : "COMPRAR (2500 💎)";
+    document.getElementById("btnBeast").innerText = hasMrBeast ? (currentSkin==="mrbeast"?"EQUIPADO":"EQUIPAR") : "COMPRAR (250 💎)";
+    document.getElementById("shopMenu").style.display = "flex";
+}
+function closeShop() { document.getElementById("shopMenu").style.display = "none"; }
+function handleSkinAction(skin) {
+    if(skin === 'herobrine') {
+        if(!hasHerobrine && coins >= 2500) { coins -= 2500; hasHerobrine = true; localStorage.setItem("skin_herobrine", "true"); }
+        if(hasHerobrine) currentSkin = "herobrine";
+    } else {
+        if(!hasMrBeast && coins >= 250) { coins -= 250; hasMrBeast = true; localStorage.setItem("skin_mrbeast", "true"); }
+        if(hasMrBeast) currentSkin = "mrbeast";
+    }
+    localStorage.setItem("steve_coins", coins); openShop();
+}
+
+function openProfile() {
+    document.getElementById("displayUserName").innerText = userName || "Jogador";
+    document.getElementById("profileBest").innerText = highScore;
+    document.getElementById("profileCoins").innerText = coins;
+    document.getElementById("profileMenu").style.display = "flex";
+}
+function closeProfile() { document.getElementById("profileMenu").style.display = "none"; }
+function editName() { let n = prompt("Novo nome:", userName); if(n) { userName = n; localStorage.setItem("steve_user_name", n); openProfile(); } }
+
+function handleAdminTrigger() {
+    let now = Date.now(); if(now - lastClickTime < 500) adminClicks++; else adminClicks = 1;
+    lastClickTime = now; if(adminClicks >= 5) { document.getElementById("adminMenu").style.display = "flex"; adminClicks = 0; }
+}
+function checkAdminLogin() {
+    if(document.getElementById("adminEmail").value === "gu24gamer@gmail.com" && document.getElementById("adminPass").value === "gu_totoso_24/11/2015") {
+        document.getElementById("adminLogin").style.display = "none";
+        document.getElementById("adminControls").style.display = "block";
+    } else alert("Erro!");
+}
+function closeAdmin() { document.getElementById("adminMenu").style.display = "none"; }
+function adminAddGems() { coins += 10000; document.getElementById("coins").innerText = coins; localStorage.setItem("steve_coins", coins); }
+function adminToggleGod() { isGodMode = !isGodMode; document.getElementById("godStatus").innerText = isGodMode ? "ON" : "OFF"; }
+
+function generateBlocks(count) {
+    for(let i = 0; i < count; i++) {
+        lastGeneratedX += 160 + Math.random() * 80;
+        let y = Math.floor((300 + Math.random() * 200)/50)*50;
+        let bx = Math.floor(lastGeneratedX / 50) * 50;
+        if(Math.floor(bx/50) % 50 === 0) world[`${bx},${y}`] = "checkpoint";
+        else world[`${bx},${y}`] = "grass";
+        if(Math.random() > 0.4) gems.push({x: bx + 15, y: y - 60, collected: false});
+    }
+}
+
+function handleJump() {
+    physicsActive = true;
+    let currentMeters = Math.floor(player.x / 50);
+
+    if(player.onGround) { 
+        player.vy = -17; 
+        player.onGround = false; 
+        doubleJumpUsedInAir = false;
+    } 
+    else if(currentSkin === "mrbeast" && !doubleJumpUsedInAir && canDoubleJump) { 
+        player.vy = -15; 
+        doubleJumpUsedInAir = true; 
+        canDoubleJump = false;
+        metersAtLastDoubleJump = currentMeters;
+    }
+}
+
+function initGame(reset) {
+    updateLocalRanking();
+    canDoubleJump = true;
+    doubleJumpUsedInAir = false;
+    metersAtLastDoubleJump = 0;
+    document.querySelectorAll(".overlay").forEach(o => o.style.display = "none");
+    document.getElementById("ui").style.display = "block";
+    document.getElementById("skinLabel").innerText = currentSkin.toUpperCase();
+    if(reset) {
+        world = {}; gems = []; cameraX = 0; lastGeneratedX = 0;
+        lastCheckpoint = { x: 100, y: 400 };
+        for(let i=0; i<15; i++) { let x = i*50; world[`${x},400`] = "grass"; lastGeneratedX = x; }
+        generateBlocks(20);
+    }
+    player.x = lastCheckpoint.x; player.y = lastCheckpoint.y - 100;
+    player.vx = 0; player.vy = 0; physicsActive = false; gameRunning = true;
+    if ('ontouchstart' in window) document.getElementById("mobileControls").style.display = "flex";
+    requestAnimationFrame(loop);
+}
+
+function loop() {
+    if(!gameRunning) return;
+    let currentMeters = Math.floor(player.x / 50);
+
+    // Lógica de Recarga MrBeast
+    if(currentSkin === "mrbeast") {
+        if(!canDoubleJump) {
+            let diff = currentMeters - metersAtLastDoubleJump;
+            let needed = 80 - diff;
+            if(needed <= 0) {
+                canDoubleJump = true;
+                document.getElementById("abilityStatus").innerText = " | PULO PRONTO! ✅";
+            } else {
+                document.getElementById("abilityStatus").innerText = ` | RECARGA: ${needed}m`;
+            }
+        } else {
+            document.getElementById("abilityStatus").innerText = " | PULO PRONTO! ✅";
+        }
+    } else {
+        document.getElementById("abilityStatus").innerText = "";
+    }
+
+    if(physicsActive) {
+        if(input.left) player.vx = -6.5; else if(input.right) player.vx = 6.5; else player.vx *= 0.8;
+        player.vy += 0.8; player.x += player.vx; player.y += player.vy;
+        player.onGround = false;
+
+        for(let pos in world) {
+            let [bx, by] = pos.split(",").map(Number);
+            if(player.x+player.w > bx && player.x < bx+50 && player.y+player.h > by && player.y+player.h < by+20 && player.vy > 0) {
+                player.y = by - player.h; player.vy = 0; player.onGround = true;
+            }
+        }
+        gems.forEach(g => { if(!g.collected && Math.abs(player.x-g.x)<30 && Math.abs(player.y-g.y)<50) { g.collected = true; coins++; document.getElementById("coins").innerText = coins; }});
+        
+        if(player.y > canvas.height + 200) {
+            if(isGodMode) { player.y = 0; player.vy = 0; }
+            else { 
+                gameRunning = false; highScore = Math.max(highScore, currentMeters);
+                localStorage.setItem("steve_record", highScore); localStorage.setItem("steve_coins", coins);
+                updateLocalRanking(); document.getElementById("deathMenu").style.display = "flex"; return; 
+            }
+        }
+        cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+        if(player.x > lastGeneratedX - 1000) generateBlocks(15);
+    }
+
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(bx > cameraX-100 && bx < cameraX+canvas.width+100) {
+            ctx.fillStyle = world[pos] === "checkpoint" ? "#00e5ff" : "#4caf50";
+            ctx.fillRect(bx-cameraX, by, 50, 15);
+            ctx.fillStyle = "#795548"; ctx.fillRect(bx-cameraX, by+15, 50, 35);
+        }
+    }
+    gems.forEach(g => { if(!g.collected) { ctx.fillStyle = "#00ff00"; ctx.fillRect(g.x-cameraX, g.y, 15, 20); }});
+    
+    let sx = player.x - cameraX, sy = player.y;
+    
+    if(currentSkin === "mrbeast") {
+        ctx.fillStyle = "#9e7a5c"; ctx.fillRect(sx+4, sy+40, 10, 24); ctx.fillRect(sx+18, sy+40, 10, 24);
+        ctx.fillStyle = "#111"; ctx.fillRect(sx+4, sy+18, 24, 22);
+        ctx.fillStyle = "#2196f3"; ctx.fillRect(sx+10, sy+24, 12, 8);
+        ctx.fillStyle = "#e0ac69"; ctx.fillRect(sx+4, sy, 24, 20);
+        ctx.fillStyle = "#a1887f"; ctx.fillRect(sx+4, sy, 24, 6);
+        ctx.fillStyle = "white"; ctx.fillRect(sx+7, sy+8, 5, 5); ctx.fillRect(sx+19, sy+8, 5, 5);
+    } else {
+        let h = currentSkin === "herobrine";
+        // TEXTURA CLÁSSICA DO STEVE
+        ctx.fillStyle = h ? "#111" : "#3c44aa"; // Calça azul escuro
+        ctx.fillRect(sx+4, sy+40, 10, 24); ctx.fillRect(sx+18, sy+40, 10, 24);
+        ctx.fillStyle = h ? "#333" : "#3aa0a2"; // Camiseta azul claro
+        ctx.fillRect(sx+4, sy+18, 24, 22);
+        ctx.fillStyle = h ? "#b28d7d" : "#d3a395"; // Pele
+        ctx.fillRect(sx-2, sy+18, 6, 20); ctx.fillRect(sx+28, sy+18, 6, 20); // Braços
+        ctx.fillRect(sx+4, sy, 24, 20); // Cabeça
+        ctx.fillStyle = h ? "#3a2518" : "#4e342e"; // Cabelo
+        ctx.fillRect(sx+4, sy, 24, 6);
+        ctx.fillStyle = "white"; 
+        if(h) {
+            ctx.shadowBlur = 10; ctx.shadowColor = "white";
+            ctx.fillRect(sx+7, sy+8, 6, 5); ctx.fillRect(sx+19, sy+8, 6, 5);
+            ctx.shadowBlur = 0;
+        } else {
+            ctx.fillRect(sx+7, sy+8, 6, 5); ctx.fillRect(sx+19, sy+8, 6, 5);
+            ctx.fillStyle = "#3c44aa"; // Olhos azuis do Steve
+            ctx.fillRect(sx+10, sy+8, 3, 5); ctx.fillRect(sx+22, sy+8, 3, 5);
+        }
+    }
+    document.getElementById("dist").innerText = currentMeters;
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown", (e) => {
+    if(e.code === "ArrowUp" || e.code === "Space") handleJump();
+    if(e.code === "ArrowLeft") { physicsActive=true; input.left=true; }
+    if(e.code === "ArrowRight") { physicsActive=true; input.right=true; }
+});
+window.addEventListener("keyup", (e) => {
+    if(e.code === "ArrowLeft") input.left=false;
+    if(e.code === "ArrowRight") input.right=false;
+});
+const bind = (id, fn) => { document.getElementById(id).addEventListener("touchstart", (e) => { e.preventDefault(); fn(); }); };
+bind("btnLeft", () => { physicsActive=true; input.left=true; });
+document.getElementById("btnLeft").addEventListener("touchend", () => input.left=false);
+bind("btnRight", () => { physicsActive=true; input.right=true; });
+document.getElementById("btnRight").addEventListener("touchend", () => input.right=false);
+bind("btnJump", () => handleJump());
+</script>
+</body>
+</html>
