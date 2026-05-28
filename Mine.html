@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Steve Parkour - Versão Final</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: sans-serif; }
+        canvas { display: block; }
+        .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: none; flex-direction: column; align-items: center; justify-content: center; color: white; }
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 8px; pointer-events: none; }
+        #checkpointMsg { position: absolute; top: 20%; width: 100%; text-align: center; color: #ffeb3b; font-size: 40px; font-weight: bold; display: none; text-shadow: 2px 2px #000; }
+    </style>
+</head>
+<body>
+
+    <div id="menu" class="overlay" style="display: flex;">
+        <h1>STEVE PARKOUR</h1>
+        <button style="padding: 15px; cursor: pointer;" onclick="initGame(true)">JOGAR</button>
+    </div>
+    <div id="deathMenu" class="overlay"><h1>FIM DE JOGO</h1><button onclick="location.reload()">MENU</button></div>
+    <div id="checkpointMsg">CHECKPOINT! 🚩</div>
+    <div id="ui">🏁 <span id="dist">0</span>m | 💎 <span id="coins">0</span> <span id="abilityStatus"></span></div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, physicsActive = false, world = {}, cameraX = 0, coins = 0;
+let player = { x: 100, y: 300, w: 32, h: 64, vx: 0, vy: 0, onGround: false };
+let gems = [], lastGeneratedX = 0, checkpointsAchieved = [];
+let currentSkin = "steve"; // Pode alternar para "mrbeast" ou "herobrine"
+let lastTpTime = 0, canDoubleJump = true, doubleJumpUsedInAir = false, metersAtLastDoubleJump = 0;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+function generateBlocks(count) {
+    for(let i = 0; i < count; i++) {
+        lastGeneratedX += 160 + Math.random() * 80;
+        let y = Math.floor((300 + Math.random() * 200)/50)*50;
+        let bx = Math.floor(lastGeneratedX / 50) * 50;
+        world[`${bx},${y}`] = "grass";
+        
+        // Geração de esmeraldas com chances
+        let rand = Math.random();
+        let type = (rand < 0.10) ? "red" : ((rand < 0.30) ? "blue" : "green");
+        gems.push({x: bx + 15, y: y - 60, type: type, collected: false});
+    }
+}
+
+function initGame(reset) {
+    if(reset) { world = {}; gems = []; lastGeneratedX = 0; generateBlocks(30); }
+    gameRunning = true; document.getElementById("menu").style.display = "none";
+    requestAnimationFrame(loop);
+}
+
+function loop() {
+    if(!gameRunning) return;
+    let m = Math.floor(player.x / 50);
+    
+    // Checkpoint a cada 100m
+    if (m > 0 && m % 100 === 0 && !checkpointsAchieved.includes(m)) {
+        checkpointsAchieved.push(m);
+        document.getElementById("checkpointMsg").style.display = "block";
+        setTimeout(() => { document.getElementById("checkpointMsg").style.display = "none"; }, 2000);
+    }
+
+    // Física e Movimento
+    player.vy += 0.8; player.y += player.vy;
+    player.onGround = false;
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(player.x+32 > bx && player.x < bx+50 && player.y+64 > by && player.y+64 < by+20 && player.vy > 0) {
+            player.y = by - 64; player.vy = 0; player.onGround = true;
+        }
+    }
+    player.x += 5; // Velocidade constante
+    cameraX += (player.x - canvas.width/3 - cameraX) * 0.1;
+    if(player.x > lastGeneratedX - 1000) generateBlocks(15);
+
+    // Lógica MrBeast (Pulo Duplo)
+    if(currentSkin === "mrbeast") {
+        let diff = m - metersAtLastDoubleJump;
+        if(diff >= 80) canDoubleJump = true;
+        document.getElementById("abilityStatus").innerText = canDoubleJump ? " | PULO PRONTO! ✅" : ` | RECARGA: ${80-diff}m`;
+    }
+
+    // Desenho
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    for(let pos in world) { let [bx, by] = pos.split(",").map(Number); ctx.fillStyle = "#4caf50"; ctx.fillRect(bx-cameraX, by, 50, 15); }
+    
+    // Esmeraldas Polidas
+    gems.forEach(g => {
+        if(!g.collected) {
+            if(Math.abs(player.x-g.x)<40 && Math.abs(player.y-g.y)<60) {
+                g.collected = true;
+                coins += (g.type === "red" ? 10 : (g.type === "blue" ? 5 : 1));
+                document.getElementById("coins").innerText = coins;
+            }
+            ctx.fillStyle = (g.type === "red" ? "#ff0000" : (g.type === "blue" ? "#0000ff" : "#00ff00"));
+            ctx.fillRect(g.x-cameraX, g.y, 20, 20);
+            ctx.fillStyle = "white"; ctx.fillRect(g.x-cameraX+5, g.y+5, 10, 10);
+        }
+    });
+
+    // Steve Clássico
+    ctx.fillStyle = "#3c44aa"; ctx.fillRect(player.x-cameraX+4, player.y+40, 10, 24); ctx.fillRect(player.x-cameraX+18, player.y+40, 10, 24);
+    ctx.fillStyle = "#3aa0a2"; ctx.fillRect(player.x-cameraX+4, player.y+18, 24, 22);
+    ctx.fillStyle = "#d3a395"; ctx.fillRect(player.x-cameraX+4, player.y, 24, 20);
+
+    document.getElementById("dist").innerText = m;
+    if(player.y > canvas.height) document.getElementById("deathMenu").style.display = "flex";
+    else requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown", (e) => {
+    if(e.code === "Space") {
+        if(player.onGround) { player.vy = -17; doubleJumpUsedInAir = false; }
+        else if(currentSkin === "mrbeast" && canDoubleJump && !doubleJumpUsedInAir) { player.vy = -15; canDoubleJump = false; doubleJumpUsedInAir = true; metersAtLastDoubleJump = Math.floor(player.x/50); }
+    }
+    if(e.code === "KeyQ" && currentSkin === "herobrine" && Date.now() - lastTpTime > 2000) { player.x += 400; lastTpTime = Date.now(); }
+});
+</script>
+</body>
+</html>
