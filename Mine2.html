@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Steve Parkour HD - Edição Definitiva</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #9db9eb; font-family: 'Arial', sans-serif; touch-action: none; user-select: none; }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        .overlay { position: absolute; inset: 0; background: #9db9eb; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 5000; text-align: center; }
+        #deathMenu, #shopMenu, #adminMenu, #nameScreen, #profileMenu, #rankMenu { background: rgba(0,0,0,0.9); color: white; }
+        
+        .btn { width: 280px; padding: 15px; margin: 10px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px #222; pointer-events: auto; touch-action: manipulation; }
+        .btn-start { background: #4caf50; }
+        .btn-shop { background: #9c27b0; }
+        .btn-rank { background: #ff9800; }
+        .btn-menu { background: #757575; }
+        
+        .name-input, .admin-input { padding: 12px; margin: 8px; border-radius: 8px; border: 1px solid #00e5ff; width: 260px; font-size: 16px; color: black; }
+        
+        #mainProfileBtn { position: absolute; top: 15px; left: 15px; width: 120px; background: #2196f3; z-index: 6000; padding: 10px; border-radius: 10px; border: none; color: white; font-weight: bold; cursor: pointer; pointer-events: auto; touch-action: manipulation; }
+        
+        #ui { position: absolute; top: 10px; left: 150px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 8px; z-index: 200; display: none; border: 1px solid #fff; }
+        .rank-card { background: #333; padding: 20px; border-radius: 20px; border: 2px solid #ff9800; width: 85%; max-width: 450px; }
+        table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #444; }
+        .highlight { color: #00e5ff; font-weight: bold; }
+        
+        .controls { position: absolute; bottom: 20px; width: 100%; display: none; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 150; pointer-events: none; }
+        .ctrl-btn { width: 80px; height: 80px; background: rgba(255,255,255,0.25); border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; user-select: none; -webkit-user-select: none; pointer-events: auto; cursor: pointer; }
+        
+        #checkpointMsg { position: absolute; top: 20%; width: 100%; text-align: center; color: #ffeb3b; font-size: 40px; font-weight: bold; display: none; text-shadow: 3px 3px #000; z-index: 1000; }
+    </style>
+</head>
+<body>
+
+    <button id="mainProfileBtn">👤 PERFIL</button>
+
+    <div id="menu" class="overlay" style="display: flex;">
+        <h1 style="color:white; text-shadow: 3px 3px #000; font-size: 40px;">STEVE PARKOUR</h1>
+        <button id="btnPlayMain" class="btn btn-start">JOGAR</button>
+        <button id="btnShopMain" class="btn btn-shop">LOJA SKINS 🛒</button>
+        <button id="btnRankMain" class="btn btn-rank">PLACAR 🪧</button>
+    </div>
+
+    <div id="rankMenu" class="overlay">
+        <div class="rank-card">
+            <h2>RANKING LOCAL</h2>
+            <table>
+                <thead><tr><th>Pos</th><th>Nome</th><th>Metros</th></tr></thead>
+                <tbody id="rankBody"></tbody>
+            </table>
+            <button id="btnBackRank" class="btn btn-menu">VOLTAR</button>
+        </div>
+    </div>
+
+    <div id="shopMenu" class="overlay">
+        <h1>LOJA DE SKINS</h1>
+        <p>Suas Esmeraldas: 💎 <span id="shopCoins">0</span></p>
+        <button id="btnHero" class="btn btn-shop">HEROBRINE (2500 💎)</button>
+        <button id="btnBeast" class="btn btn-shop" style="background:#2196f3">MR BEAST (250 💎)</button>
+        <button id="btnBackShop" class="btn btn-menu">VOLTAR</button>
+    </div>
+
+    <div id="nameScreen" class="overlay">
+        <h1>QUAL SEU NOME?</h1>
+        <input type="text" id="userNameInput" class="name-input" placeholder="Digite seu nick...">
+        <button id="btnConfirmName" class="btn btn-start">CONFIRMAR</button>
+    </div>
+
+    <div id="profileMenu" class="overlay">
+        <div class="rank-card" style="border-color:#2196f3">
+            <h2>SEU PERFIL</h2>
+            <p>Nome: <span id="displayUserName"></span></p>
+            <p>Maior Recorde: <span id="profileBest">0</span>m</p>
+            <p>Saldo Atual: 💎 <span id="profileCoins">0</span></p>
+            <button id="btnBackProfile" class="btn btn-menu">VOLTAR</button>
+        </div>
+    </div>
+
+    <div id="adminMenu" class="overlay">
+        <h1 style="color:#00e5ff">PAINEL DE ADMINISTRADOR</h1>
+        <div id="adminLogin">
+            <input type="email" id="adminEmail" class="admin-input" placeholder="E-mail de Acesso">
+            <input type="password" id="adminPass" class="admin-input" placeholder="Senha de Admin">
+            <button id="btnAuthAdmin" class="btn btn-start">AUTENTICAR</button>
+        </div>
+        <div id="adminControls" style="display:none">
+            <button id="btnAdminGems" class="btn btn-shop">+10.000 GEMS 💎</button>
+            <button id="btnAdminGod" class="btn btn-rank">GOD MODE: <span id="godStatus">OFF</span></button>
+            <button id="btnBackAdmin" class="btn btn-menu">SAIR</button>
+        </div>
+    </div>
+
+    <div id="deathMenu" class="overlay">
+        <h1>FIM DE JOGO</h1>
+        <button id="btnRespawn" class="btn btn-start">RECOMEÇAR DO SPAWN 🚩</button>
+        <button id="btnDeathToMain" class="btn btn-menu">MENU PRINCIPAL</button>
+    </div>
+
+    <div id="ui">👤 <span id="skinLabel">STEVE</span> | <span style="cursor:pointer" id="adminTriggerBtn">🏁 <span id="dist">0</span>m</span> | 💎 <span id="coins">0</span><span id="abilityStatus"></span></div>
+    <div id="checkpointMsg">CHECKPOINT! 🚩</div>
+
+    <div class="controls" id="mobileControls">
+        <div style="display:flex; gap:15px">
+            <div class="ctrl-btn" id="btnLeft">←</div>
+            <div class="ctrl-btn" id="btnRight">→</div>
+        </div>
+        <div class="ctrl-btn" id="btnJump">↑</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameRunning = false, physicsActive = false, world = {}, cameraX = 0;
+let coins = parseInt(localStorage.getItem("steve_coins")) || 0;
+let highScore = parseInt(localStorage.getItem("steve_record")) || 0;
+let userName = localStorage.getItem("steve_user_name") || "";
+let hasHerobrine = localStorage.getItem("skin_herobrine") === "true";
+let hasMrBeast = localStorage.getItem("skin_mrbeast") === "true";
+let currentSkin = "steve";
+
+let gems = [], lastGeneratedX = 0, checkpointsAchieved = [];
+let adminClicks = 0, lastClickTime = 0, isGodMode = false;
+
+let metersAtLastTp = 0;
+let metersAtLastDoubleJump = 0;
+
+const player = { x: 100, y: 336, w: 32, h: 64, vx: 0, vy: 0, onGround: false };
+const input = { left: false, right: false };
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+// LOGIN E CONTA ADMIN
+function handleAdminTrigger() {
+    let now = Date.now();
+    if(now - lastClickTime < 500) adminClicks++; else adminClicks = 1;
+    lastClickTime = now;
+    if(adminClicks >= 5) {
+        document.getElementById("adminLogin").style.display = "block";
+        document.getElementById("adminControls").style.display = "none";
+        document.getElementById("adminMenu").style.display = "flex";
+        adminClicks = 0;
+    }
+}
+function checkAdminLogin() {
+    let email = document.getElementById("adminEmail").value;
+    let pass = document.getElementById("adminPass").value;
+    if(email === "gu24gamer@gmail.com" && pass === "gu_totoso_24/11/2015") {
+        document.getElementById("adminLogin").style.display = "none";
+        document.getElementById("adminControls").style.display = "block";
+    } else { alert("Dados incorretos!"); }
+}
+function adminAddGems() { coins += 10000; saveStats(); document.getElementById("coins").innerText = coins; }
+function adminToggleGod() { isGodMode = !isGodMode; document.getElementById("godStatus").innerText = isGodMode ? "ON" : "OFF"; }
+
+// GERENCIAMENTO DE MENUS
+function closeMenu(id) { document.getElementById(id).style.display = "none"; }
+function backToMenu() { document.getElementById("deathMenu").style.display = "none"; document.getElementById("menu").style.display = "flex"; document.getElementById("ui").style.display = "none"; document.getElementById("mobileControls").style.display = "none"; }
+function checkNameBeforeStart() { if(!userName) document.getElementById("nameScreen").style.display = "flex"; else initGame(true); }
+function saveNameAndStart() { let val = document.getElementById("userNameInput").value.trim(); if(val) { userName = val; localStorage.setItem("steve_user_name", userName); closeMenu("nameScreen"); initGame(true); } }
+function openShop() { document.getElementById("shopCoins").innerText = coins; document.getElementById("btnHero").innerText = hasHerobrine ? (currentSkin==="herobrine"?"EQUIPADO":"EQUIPAR") : "COMPRAR (2500 💎)"; document.getElementById("btnBeast").innerText = hasMrBeast ? (currentSkin==="mrbeast"?"EQUIPADO":"EQUIPAR") : "COMPRAR (250 💎)"; document.getElementById("shopMenu").style.display = "flex"; }
+
+function handleSkinAction(skin) {
+    if(skin === 'herobrine') {
+        if(!hasHerobrine && coins >= 2500) { coins -= 2500; hasHerobrine = true; localStorage.setItem("skin_herobrine", "true"); }
+        if(hasHerobrine) currentSkin = "herobrine";
+    } else if(skin === 'mrbeast') {
+        if(!hasMrBeast && coins >= 250) { coins -= 250; hasMrBeast = true; localStorage.setItem("skin_mrbeast", "true"); }
+        if(hasMrBeast) currentSkin = "mrbeast";
+    }
+    saveStats(); openShop();
+}
+function openProfile() { document.getElementById("displayUserName").innerText = userName || "Desconhecido"; document.getElementById("profileBest").innerText = highScore; document.getElementById("profileCoins").innerText = coins; document.getElementById("profileMenu").style.display = "flex"; }
+function openRank() {
+    let ranking = JSON.parse(localStorage.getItem("steve_ranking") || "[]");
+    let html = ranking.map((p, i) => `<tr class="${p.name===userName?'highlight':''}"><td>#${i+1}</td><td>${p.name}</td><td>${p.best}m</td></tr>`).join("");
+    document.getElementById("rankBody").innerHTML = html || "<tr><td colspan='3'>Sem recordes!</td></tr>";
+    document.getElementById("rankMenu").style.display = "flex";
+}
+
+function saveStats() {
+    localStorage.setItem("steve_coins", coins);
+    localStorage.setItem("steve_record", highScore);
+    if(userName) {
+        let ranking = JSON.parse(localStorage.getItem("steve_ranking") || "[]");
+        let idx = ranking.findIndex(u => u.name === userName);
+        if(idx > -1) ranking[idx].best = Math.max(ranking[idx].best, highScore);
+        else ranking.push({name: userName, best: highScore});
+        ranking.sort((a,b) => b.best - a.best);
+        localStorage.setItem("steve_ranking", JSON.stringify(ranking.slice(0,5)));
+    }
+}
+
+function generateBlocks(count) {
+    for(let i = 0; i < count; i++) {
+        lastGeneratedX += 160 + Math.random() * 90;
+        let y = Math.floor((280 + Math.random() * 140)/50)*50;
+        world[`${Math.floor(lastGeneratedX/50)*50},${y}`] = "grass";
+        
+        let rand = Math.random();
+        let type = (rand < 0.10) ? "red" : ((rand < 0.30) ? "blue" : "green");
+        gems.push({x: lastGeneratedX + 15, y: y - 45, type: type, collected: false});
+    }
+}
+
+function handleJump() {
+    physicsActive = true;
+    let m = Math.floor(player.x / 50);
+    if(player.onGround) {
+        player.vy = -18.5; 
+        player.onGround = false;
+    } else if(currentSkin === "mrbeast" && (m - metersAtLastDoubleJump >= 80)) {
+        player.vy = -15.5;
+        metersAtLastDoubleJump = m;
+    } else if(currentSkin === "herobrine" && (m - metersAtLastTp >= 50)) {
+        player.x += 400;
+        metersAtLastTp = m;
+    }
+}
+
+function initGame(reset) {
+    document.querySelectorAll(".overlay").forEach(o => o.style.display = "none");
+    document.getElementById("ui").style.display = "block";
+    
+    if('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        document.getElementById("mobileControls").style.display = "flex";
+    }
+    
+    document.getElementById("skinLabel").innerText = currentSkin.toUpperCase();
+    document.getElementById("coins").innerText = coins;
+
+    if(reset) {
+        world = {}; gems = []; checkpointsAchieved = []; cameraX = 0; lastGeneratedX = 200;
+        world["100,400"] = "grass"; world["150,400"] = "grass"; world["200,400"] = "grass"; 
+        generateBlocks(20);
+        player.x = 100; player.y = 336; player.vx = 0; player.vy = 0;
+        metersAtLastTp = 0; metersAtLastDoubleJump = 0;
+        input.left = false; input.right = false;
+    }
+    physicsActive = false; gameRunning = true;
+    requestAnimationFrame(loop);
+}
+
+function loop() {
+    if(!gameRunning) return; // TRAVA DE SEGURANÇA CONTRA ERROS
+    
+    let m = Math.floor(player.x / 50);
+
+    if(m > 0 && m % 100 === 0 && !checkpointsAchieved.includes(m)) {
+        checkpointsAchieved.push(m);
+        document.getElementById("checkpointMsg").style.display = "block";
+        setTimeout(() => {
+            let el = document.getElementById("checkpointMsg");
+            if(el) el.style.display = "none";
+        }, 2000);
+    }
+
+    let statusEl = document.getElementById("abilityStatus");
+    if(statusEl) {
+        if(currentSkin === "mrbeast") {
+            let diff = m - metersAtLastDoubleJump;
+            statusEl.innerText = (diff >= 80) ? " | PULO PRONTO! ✅" : ` | RECARGA: ${80-diff}m`;
+        } else if(currentSkin === "herobrine") {
+            let diff = m - metersAtLastTp;
+            statusEl.innerText = (diff >= 50) ? " | TP PRONTO! ✅" : ` | RECARGA: ${50-diff}m`;
+        } else { statusEl.innerText = ""; }
+    }
+
+    if(physicsActive) {
+        if(input.left) player.vx = -8.5; 
+        else if(input.right) player.vx = 8.5; 
+        else player.vx *= 0.88; 
+
+        player.vy += 0.95; 
+        player.x += player.vx; 
+        player.y += player.vy;
+        player.onGround = false;
+
+        for(let pos in world) {
+            let [bx, by] = pos.split(",").map(Number);
+            if(player.x+player.w > bx && player.x < bx+50 && player.y+player.h > by && player.y+player.h < by+18 && player.vy > 0) {
+                player.y = by - player.h; player.vy = 0; player.onGround = true;
+            }
+        }
+
+        gems.forEach(g => {
+            if(!g.collected && Math.abs(player.x - g.x) < 30 && Math.abs(player.y - g.y) < 50) {
+                g.collected = true;
+                coins += (g.type === "red" ? 10 : (g.type === "blue" ? 5 : 1));
+                let cEl = document.getElementById("coins");
+                if(cEl) cEl.innerText = coins;
+                saveStats();
+            }
+        });
+
+        if(player.y > canvas.height + 150) {
+            if(isGodMode) { player.y = 100; player.vy = 0; } 
+            else {
+                gameRunning = false; highScore = Math.max(highScore, m); saveStats();
+                document.getElementById("deathMenu").style.display = "flex"; return;
+            }
+        }
+        cameraX += (player.x - canvas.width/3 - cameraX) * 0.08;
+        if(player.x > lastGeneratedX - 900) generateBlocks(15);
+    }
+
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+    
+    for(let pos in world) {
+        let [bx, by] = pos.split(",").map(Number);
+        if(bx > cameraX - 60 && bx < cameraX + canvas.width + 60) {
+            ctx.fillStyle = "#4caf50"; ctx.fillRect(bx-cameraX, by, 50, 14);
+            ctx.fillStyle = "#795548"; ctx.fillRect(bx-cameraX, by+14, 50, 36);
+        }
+    }
+
+    gems.forEach(g => {
+        if(!g.collected && g.x > cameraX - 30 && g.x < cameraX + canvas.width + 30) {
+            ctx.fillStyle = (g.type === "red" ? "#ff0000" : (g.type === "blue" ? "#0000ff" : "#00ff00"));
+            ctx.fillRect(g.x-cameraX, g.y, 18, 18);
+            ctx.fillStyle = "white"; ctx.fillRect(g.x-cameraX+4, g.y+4, 8, 8); 
+        }
+    });
+
+    let sx = player.x - cameraX, sy = player.y;
+    
+    if(currentSkin === "mrbeast") {
+        ctx.fillStyle = "#1a237e"; ctx.fillRect(sx+4, sy+40, 10, 24); ctx.fillRect(sx+18, sy+40, 10, 24);
+        ctx.fillStyle = "#212121"; ctx.fillRect(sx+4, sy+18, 24, 22);
+        ctx.fillStyle = "#00e5ff"; ctx.fillRect(sx+10, sy+24, 12, 6);
+        ctx.fillStyle = "#212121"; ctx.fillRect(sx-2, sy+18, 6, 20); ctx.fillRect(sx+28, sy+18, 6, 20);
+        ctx.fillStyle = "#e0ac69"; ctx.fillRect(sx+4, sy, 24, 20);
+        ctx.fillStyle = "#5d4037"; ctx.fillRect(sx+4, sy, 24, 6); ctx.fillRect(sx+4, sy, 6, 12);
+        ctx.fillStyle = "white"; ctx.fillRect(sx+6, sy+9, 5, 4); ctx.fillRect(sx+18, sy+9, 5, 4);
+        ctx.fillStyle = "#2196f3"; ctx.fillRect(sx+8, sy+9, 3, 4); ctx.fillRect(sx+20, sy+9, 3, 4);
+    } else {
+        let isHero = (currentSkin === "herobrine");
+        ctx.fillStyle = "#3c44aa"; ctx.fillRect(sx+4, sy+40, 10, 24); ctx.fillRect(sx+18, sy+40, 10, 24);
+        ctx.fillStyle = "#3aa0a2"; ctx.fillRect(sx+4, sy+18, 24, 22);
+        ctx.fillStyle = "#d3a395"; ctx.fillRect(sx-2, sy+18, 6, 20); ctx.fillRect(sx+28, sy+18, 6, 20); 
+        ctx.fillStyle = "#d3a395"; ctx.fillRect(sx+4, sy, 24, 20); 
+        ctx.fillStyle = "#4e342e"; ctx.fillRect(sx+4, sy, 24, 5); 
+        
+        if(isHero) {
+            ctx.fillStyle = "white";
+            ctx.shadowBlur = 15; ctx.shadowColor = "white";
+            ctx.fillRect(sx+6, sy+8, 6, 5); ctx.fillRect(sx+18, sy+8, 6, 5);
+            ctx.shadowBlur = 0; 
+        } else {
+            ctx.fillStyle = "white"; ctx.fillRect(sx+6, sy+8, 6, 5); ctx.fillRect(sx+18, sy+8, 6, 5);
+            ctx.fillStyle = "#3c44aa"; ctx.fillRect(sx+9, sy+8, 3, 5); ctx.fillRect(sx+21, sy+8, 3, 5);
+        }
+    }
+
+    let dEl = document.getElementById("dist");
+    if(dEl) dEl.innerText = m;
+    requestAnimationFrame(loop);
+}
+
+// ATRIBUIÇÃO COMPLETA DOS EVENTOS COM SEGURANÇA
+window.addEventListener("DOMContentLoaded", () => {
+    // Menu Principal
+    document.getElementById("btnPlayMain").addEventListener("click", checkNameBeforeStart);
+    document.getElementById("btnShopMain").addEventListener("click", openShop);
+    document.getElementById("btnRankMain").addEventListener("click", openRank);
+    document.getElementById("mainProfileBtn").addEventListener("click", openProfile);
+
+    // Menu Ranking
+    document.getElementById("btnBackRank").addEventListener("click", () => closeMenu('rankMenu'));
+
+    // Menu Loja
+    document.getElementById("btnHero").addEventListener("click", () => handleSkinAction('herobrine'));
+    document.getElementById("btnBeast").addEventListener("click", () => handleSkinAction('mrbeast'));
+    document.getElementById("btnBackShop").addEventListener("click", () => closeMenu('shopMenu'));
+
+    // Menu Nome
+    document.getElementById("btnConfirmName").addEventListener("click", saveNameAndStart);
+
+    // Menu Perfil
+    document.getElementById("btnBackProfile").addEventListener("click", () => closeMenu('profileMenu'));
+
+    // Painel Admin
+    document.getElementById("adminTriggerBtn").addEventListener("click", handleAdminTrigger);
+    document.getElementById("btnAuthAdmin").addEventListener("click", checkAdminLogin);
+    document.getElementById("btnAdminGems").addEventListener("click", adminAddGems);
+    document.getElementById("btnAdminGod").addEventListener("click", adminToggleGod);
+    document.getElementById("btnBackAdmin").addEventList
